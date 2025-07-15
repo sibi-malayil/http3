@@ -1,0 +1,167 @@
+What's in 1.83.0 stable
+New const capabilities
+This release includes several large extensions to what code running in const contexts can do. This refers to all code that the compiler has to evaluate at compile-time: the initial value of const and static items, array lengths, enum discriminant values, const generic arguments, and functions callable from such contexts (const fn).
+
+References to statics. So far, const contexts except for the initializer expression of a static item were forbidden from referencing static items. This limitation has now been lifted:
+
+static S: i32 = 25;
+const C: &i32 = &S;
+Note, however, that reading the value of a mutable or interior mutable static is still not permitted in const contexts. Furthermore, the final value of a constant may not reference any mutable or interior mutable statics:
+
+static mut S: i32 = 0;
+
+const C1: i32 = unsafe { S };
+// error: constant accesses mutable global memory
+
+const C2: &i32 = unsafe { &S };
+// error: encountered reference to mutable memory in `const`
+These limitations ensure that constants are still "constant": the value they evaluate to, and their meaning as a pattern (which can involve dereferencing references), will be the same throughout the entire program execution.
+
+That said, a constant is permitted to evaluate to a raw pointer that points to a mutable or interior mutable static:
+
+static mut S: i32 = 64;
+const C: *mut i32 = &raw mut S;
+Mutable references and pointers. It is now possible to use mutable references in const contexts:
+
+const fn inc(x: &mut i32) {
+    *x += 1;
+}
+
+const C: i32 = {
+    let mut c = 41;
+    inc(&mut c);
+    c
+};
+Mutable raw pointers and interior mutability are also supported:
+
+use std::cell::UnsafeCell;
+
+const C: i32 = {
+    let c = UnsafeCell::new(41);
+    unsafe { *c.get() += 1 };
+    c.into_inner()
+};
+However, mutable references and pointers can only be used inside the computation of a constant, they cannot become a part of the final value of the constant:
+
+const C: &mut i32 = &mut 4;
+// error[E0764]: mutable references are not allowed in the final value of constants
+This release also ships with a whole bag of new functions that are now stable in const contexts (see the end of the "Stabilized APIs" section).
+
+These new capabilities and stabilized APIs unblock an entire new category of code to be executed inside const contexts, and we are excited to see how the Rust ecosystem will make use of this!
+
+Stabilized APIs
+BufRead::skip_until
+ControlFlow::break_value
+ControlFlow::continue_value
+ControlFlow::map_break
+ControlFlow::map_continue
+DebugList::finish_non_exhaustive
+DebugMap::finish_non_exhaustive
+DebugSet::finish_non_exhaustive
+DebugTuple::finish_non_exhaustive
+ErrorKind::ArgumentListTooLong
+ErrorKind::Deadlock
+ErrorKind::DirectoryNotEmpty
+ErrorKind::ExecutableFileBusy
+ErrorKind::FileTooLarge
+ErrorKind::HostUnreachable
+ErrorKind::IsADirectory
+ErrorKind::NetworkDown
+ErrorKind::NetworkUnreachable
+ErrorKind::NotADirectory
+ErrorKind::NotSeekable
+ErrorKind::ReadOnlyFilesystem
+ErrorKind::ResourceBusy
+ErrorKind::StaleNetworkFileHandle
+ErrorKind::StorageFull
+ErrorKind::TooManyLinks
+Option::get_or_insert_default
+Waker::data
+Waker::new
+Waker::vtable
+char::MIN
+hash_map::Entry::insert_entry
+hash_map::VacantEntry::insert_entry
+These APIs are now stable in const contexts:
+
+Cell::into_inner
+Duration::as_secs_f32
+Duration::as_secs_f64
+Duration::div_duration_f32
+Duration::div_duration_f64
+MaybeUninit::as_mut_ptr
+NonNull::as_mut
+NonNull::copy_from
+NonNull::copy_from_nonoverlapping
+NonNull::copy_to
+NonNull::copy_to_nonoverlapping
+NonNull::slice_from_raw_parts
+NonNull::write
+NonNull::write_bytes
+NonNull::write_unaligned
+OnceCell::into_inner
+Option::as_mut
+Option::expect
+Option::replace
+Option::take
+Option::unwrap
+Option::unwrap_unchecked
+Option::<&_>::copied
+Option::<&mut _>::copied
+Option::<Option<_>>::flatten
+Option::<Result<_, _>>::transpose
+RefCell::into_inner
+Result::as_mut
+Result::<&_, _>::copied
+Result::<&mut _, _>::copied
+Result::<Option<_>, _>::transpose
+UnsafeCell::get_mut
+UnsafeCell::into_inner
+array::from_mut
+char::encode_utf8
+{float}::classify
+{float}::is_finite
+{float}::is_infinite
+{float}::is_nan
+{float}::is_normal
+{float}::is_sign_negative
+{float}::is_sign_positive
+{float}::is_subnormal
+{float}::from_bits
+{float}::from_be_bytes
+{float}::from_le_bytes
+{float}::from_ne_bytes
+{float}::to_bits
+{float}::to_be_bytes
+{float}::to_le_bytes
+{float}::to_ne_bytes
+mem::replace
+ptr::replace
+ptr::slice_from_raw_parts_mut
+ptr::write
+ptr::write_unaligned
+<*const _>::copy_to
+<*const _>::copy_to_nonoverlapping
+<*mut _>::copy_from
+<*mut _>::copy_from_nonoverlapping
+<*mut _>::copy_to
+<*mut _>::copy_to_nonoverlapping
+<*mut _>::write
+<*mut _>::write_bytes
+<*mut _>::write_unaligned
+slice::from_mut
+slice::from_raw_parts_mut
+<[_]>::first_mut
+<[_]>::last_mut
+<[_]>::first_chunk_mut
+<[_]>::last_chunk_mut
+<[_]>::split_at_mut
+<[_]>::split_at_mut_checked
+<[_]>::split_at_mut_unchecked
+<[_]>::split_first_mut
+<[_]>::split_last_mut
+<[_]>::split_first_chunk_mut
+<[_]>::split_last_chunk_mut
+str::as_bytes_mut
+str::as_mut_ptr
+str::from_utf8_unchecked_mut

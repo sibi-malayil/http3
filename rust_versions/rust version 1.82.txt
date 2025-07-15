@@ -1,0 +1,322 @@
+What's in 1.82.0 stable
+cargo info
+Cargo now has an info subcommand to display information about a package in the registry, fulfilling a long standing request just shy of its tenth anniversary! Several third-party extensions like this have been written over the years, and this implementation was developed as cargo-information before merging into Cargo itself.
+
+For example, here's what you could see for cargo info cc:
+
+cc #build-dependencies
+A build-time dependency for Cargo build scripts to assist in invoking the native
+C compiler to compile native C code into a static archive to be linked into Rust
+code.
+version: 1.1.23 (latest 1.1.30)
+license: MIT OR Apache-2.0
+rust-version: 1.63
+documentation: https://docs.rs/cc
+homepage: https://github.com/rust-lang/cc-rs
+repository: https://github.com/rust-lang/cc-rs
+crates.io: https://crates.io/crates/cc/1.1.23
+features:
+  jobserver = []
+  parallel  = [dep:libc, dep:jobserver]
+note: to see how you depend on cc, run `cargo tree --invert --package cc@1.1.23`
+By default, cargo info describes the package version in the local Cargo.lock, if any. As you can see, it will indicate when there's a newer version too, and cargo info cc@1.1.30 would report on that.
+
+Apple target promotions
+macOS on 64-bit ARM is now Tier 1
+The Rust target aarch64-apple-darwin for macOS on 64-bit ARM (M1-family or later Apple Silicon CPUs) is now a tier 1 target, indicating our highest guarantee of working properly. As the platform support page describes, every change in the Rust repository must pass full tests on every tier 1 target before it can be merged. This target was introduced as tier 2 back in Rust 1.49, making it available in rustup. This new milestone puts the aarch64-apple-darwin target on par with the 64-bit ARM Linux and the X86 macOS, Linux, and Windows targets.
+
+Mac Catalyst targets are now Tier 2
+Mac Catalyst is a technology by Apple that allows running iOS applications natively on the Mac. This is especially useful when testing iOS-specific code, as cargo test --target=aarch64-apple-ios-macabi --target=x86_64-apple-ios-macabi mostly just works (in contrast to the usual iOS targets, which need to be bundled using external tooling before they can be run on a native device or in the simulator).
+
+The targets are now tier 2, and can be downloaded with rustup target add aarch64-apple-ios-macabi x86_64-apple-ios-macabi, so now is an excellent time to update your CI pipeline to test that your code also runs in iOS-like environments.
+
+Precise capturing use<..> syntax
+Rust now supports use<..> syntax within certain impl Trait bounds to control which generic lifetime parameters are captured.
+
+Return-position impl Trait (RPIT) types in Rust capture certain generic parameters. Capturing a generic parameter allows that parameter to be used in the hidden type. That in turn affects borrow checking.
+
+In Rust 2021 and earlier editions, lifetime parameters are not captured in opaque types on bare functions and on functions and methods of inherent impls unless those lifetime parameters are mentioned syntactically in the opaque type. E.g., this is an error:
+
+//@ edition: 2021
+fn f(x: &()) -> impl Sized { x }
+error[E0700]: hidden type for `impl Sized` captures lifetime that does not appear in bounds
+ --> src/main.rs:1:30
+  |
+1 | fn f(x: &()) -> impl Sized { x }
+  |         ---     ----------   ^
+  |         |       |
+  |         |       opaque type defined here
+  |         hidden type `&()` captures the anonymous lifetime defined here
+  |
+help: add a `use<...>` bound to explicitly capture `'_`
+  |
+1 | fn f(x: &()) -> impl Sized + use<'_> { x }
+  |                            +++++++++
+With the new use<..> syntax, we can fix this, as suggested in the error, by writing:
+
+fn f(x: &()) -> impl Sized + use<'_> { x }
+Previously, correctly fixing this class of error required defining a dummy trait, conventionally called Captures, and using it as follows:
+
+trait Captures<T: ?Sized> {}
+impl<T: ?Sized, U: ?Sized> Captures<T> for U {}
+
+fn f(x: &()) -> impl Sized + Captures<&'_ ()> { x }
+That was called "the Captures trick", and it was a bit baroque and subtle. It's no longer needed.
+
+There was a less correct but more convenient way to fix this that was often used called "the outlives trick". The compiler even previously suggested doing this. That trick looked like this:
+
+fn f(x: &()) -> impl Sized + '_ { x }
+In this simple case, the trick is exactly equivalent to + use<'_> for subtle reasons explained in RFC 3498. However, in real life cases, this overconstrains the bounds on the returned opaque type, leading to problems. For example, consider this code, which is inspired by a real case in the Rust compiler:
+
+struct Ctx<'cx>(&'cx u8);
+
+fn f<'cx, 'a>(
+    cx: Ctx<'cx>,
+    x: &'a u8,
+) -> impl Iterator<Item = &'a u8> + 'cx {
+    core::iter::once_with(move || {
+        eprintln!("LOG: {}", cx.0);
+        x
+    })
+//~^ ERROR lifetime may not live long enough
+}
+We can't remove the + 'cx, since the lifetime is used in the hidden type and so must be captured. Neither can we add a bound of 'a: 'cx, since these lifetimes are not actually related and it won't in general be true that 'a outlives 'cx. If we write + use<'cx, 'a> instead, however, this will work and have the correct bounds.
+
+There are some limitations to what we're stabilizing today. The use<..> syntax cannot currently appear within traits or within trait impls (but note that there, in-scope lifetime parameters are already captured by default), and it must list all in-scope generic type and const parameters. We hope to lift these restrictions over time.
+
+Note that in Rust 2024, the examples above will "just work" without needing use<..> syntax (or any tricks). This is because in the new edition, opaque types will automatically capture all lifetime parameters in scope. This is a better default, and we've seen a lot of evidence about how this cleans up code. In Rust 2024, use<..> syntax will serve as an important way of opting-out of that default.
+
+For more details about use<..> syntax, capturing, and how this applies to Rust 2024, see the "RPIT lifetime capture rules" chapter of the edition guide. For details about the overall direction, see our recent blog post, "Changes to impl Trait in Rust 2024".
+
+Native syntax for creating a raw pointer
+Unsafe code sometimes has to deal with pointers that may dangle, may be misaligned, or may not point to valid data. A common case where this comes up are repr(packed) structs. In such a case, it is important to avoid creating a reference, as that would cause undefined behavior. This means the usual & and &mut operators cannot be used, as those create a reference -- even if the reference is immediately cast to a raw pointer, it's too late to avoid the undefined behavior.
+
+For several years, the macros std::ptr::addr_of! and std::ptr::addr_of_mut! have served this purpose. Now the time has come to provide a proper native syntax for this operation: addr_of!(expr) becomes &raw const expr, and addr_of_mut!(expr) becomes &raw mut expr. For example:
+
+#[repr(packed)]
+struct Packed {
+    not_aligned_field: i32,
+}
+
+fn main() {
+    let p = Packed { not_aligned_field: 1_82 };
+
+    // This would be undefined behavior!
+    // It is rejected by the compiler.
+    //let ptr = &p.not_aligned_field as *const i32;
+
+    // This is the old way of creating a pointer.
+    let ptr = std::ptr::addr_of!(p.not_aligned_field);
+
+    // This is the new way.
+    let ptr = &raw const p.not_aligned_field;
+
+    // Accessing the pointer has not changed.
+    // Note that `val = *ptr` would be undefined behavior because
+    // the pointer is not aligned!
+    let val = unsafe { ptr.read_unaligned() };
+}
+The native syntax makes it more clear that the operand expression of these operators is interpreted as a place expression. It also avoids the term "address-of" when referring to the action of creating a pointer. A pointer is more than just an address, so Rust is moving away from terms like "address-of" that reaffirm a false equivalence of pointers and addresses.
+
+Safe items with unsafe extern
+Rust code can use functions and statics from foreign code. The type signatures of these foreign items are provided in extern blocks. Historically, all items within extern blocks have been unsafe to use, but we didn't have to write unsafe anywhere on the extern block itself.
+
+However, if a signature within the extern block is incorrect, then using that item will result in undefined behavior. Would that be the fault of the person who wrote the extern block, or the person who used that item?
+
+We've decided that it's the responsibility of the person writing the extern block to ensure that all signatures contained within it are correct, and so we now allow writing unsafe extern:
+
+unsafe extern {
+    pub safe static TAU: f64;
+    pub safe fn sqrt(x: f64) -> f64;
+    pub unsafe fn strlen(p: *const u8) -> usize;
+}
+One benefit of this is that items within an unsafe extern block can be marked as safe to use. In the above example, we can call sqrt or read TAU without using unsafe. Items that aren't marked with either safe or unsafe are conservatively assumed to be unsafe.
+
+In future releases, we'll be encouraging the use of unsafe extern with lints. Starting in Rust 2024, using unsafe extern will be required.
+
+For further details, see RFC 3484 and the "Unsafe extern blocks" chapter of the edition guide.
+
+Unsafe attributes
+Some Rust attributes, such as no_mangle, can be used to cause undefined behavior without any unsafe block. If this were regular code we would require them to be placed in an unsafe {} block, but so far attributes have not had comparable syntax. To reflect the fact that these attributes can undermine Rust's safety guarantees, they are now considered "unsafe" and should be written as follows:
+
+#[unsafe(no_mangle)]
+pub fn my_global_function() { }
+The old form of the attribute (without unsafe) is currently still accepted, but might be linted against at some point in the future, and will be a hard error in Rust 2024.
+
+This affects the following attributes:
+
+no_mangle
+link_section
+export_name
+For further details, see the "Unsafe attributes" chapter of the edition guide.
+
+Omitting empty types in pattern matching
+Patterns which match empty (a.k.a. uninhabited) types by value can now be omitted:
+
+use std::convert::Infallible;
+pub fn unwrap_without_panic<T>(x: Result<T, Infallible>) -> T {
+    let Ok(x) = x; // the `Err` case does not need to appear
+    x
+}
+This works with empty types such as a variant-less enum Void {}, or structs and enums with a visible empty field and no #[non_exhaustive] attribute. It will also be particularly useful in combination with the never type !, although that type is still unstable at this time.
+
+There are some cases where empty patterns must still be written. For reasons related to uninitialized values and unsafe code, omitting patterns is not allowed if the empty type is accessed through a reference, pointer, or union field:
+
+pub fn unwrap_ref_without_panic<T>(x: &Result<T, Infallible>) -> &T {
+    match x {
+        Ok(x) => x,
+        // this arm cannot be omitted because of the reference
+        Err(infallible) => match *infallible {},
+    }
+}
+To avoid interfering with crates that wish to support several Rust versions, match arms with empty patterns are not yet reported as “unreachable code” warnings, despite the fact that they can be removed.
+
+Floating-point NaN semantics and const
+Operations on floating-point values (of type f32 and f64) are famously subtle. One of the reasons for this is the existence of NaN ("not a number") values which are used to represent e.g. the result of 0.0 / 0.0. What makes NaN values subtle is that more than one possible NaN value exists. A NaN value has a sign (that can be checked with f.is_sign_positive()) and a payload (that can be extracted with f.to_bits()). However, both the sign and payload of NaN values are entirely ignored by == (which always returns false). Despite very successful efforts to standardize the behavior of floating-point operations across hardware architectures, the details of when a NaN is positive or negative and what its exact payload is differ across architectures. To make matters even more complicated, Rust and its LLVM backend apply optimizations to floating-point operations when the exact numeric result is guaranteed not to change, but those optimizations can change which NaN value is produced. For instance, f * 1.0 may be optimized to just f. However, if f is a NaN, this can change the exact bit pattern of the result!
+
+With this release, Rust standardizes on a set of rules for how NaN values behave. This set of rules is not fully deterministic, which means that the result of operations like (0.0 / 0.0).is_sign_positive() can differ depending on the hardware architecture, optimization levels, and the surrounding code. Code that aims to be fully portable should avoid using to_bits and should use f.signum() == 1.0 instead of f.is_sign_positive(). However, the rules are carefully chosen to still allow advanced data representation techniques such as NaN boxing to be implemented in Rust code. For more details on what the exact rules are, check out our documentation.
+
+With the semantics for NaN values settled, this release also permits the use of floating-point operations in const fn. Due to the reasons described above, operations like (0.0 / 0.0).is_sign_positive() (which will be const-stable in Rust 1.83) can produce a different result when executed at compile-time vs at run-time. This is not a bug, and code must not rely on a const fn always producing the exact same result.
+
+Constants as assembly immediates
+The const assembly operand now provides a way to use integers as immediates without first storing them in a register. As an example, we implement a syscall to write by hand:
+
+const WRITE_SYSCALL: c_int = 0x01; // syscall 1 is `write`
+const STDOUT_HANDLE: c_int = 0x01; // `stdout` has file handle 1
+const MSG: &str = "Hello, world!\n";
+
+let written: usize;
+
+// Signature: `ssize_t write(int fd, const void buf[], size_t count)`
+unsafe {
+    core::arch::asm!(
+        "mov rax, {SYSCALL} // rax holds the syscall number",
+        "mov rdi, {OUTPUT}  // rdi is `fd` (first argument)",
+        "mov rdx, {LEN}     // rdx is `count` (third argument)",
+        "syscall            // invoke the syscall",
+        "mov {written}, rax // save the return value",
+        SYSCALL = const WRITE_SYSCALL,
+        OUTPUT = const STDOUT_HANDLE,
+        LEN = const MSG.len(),
+        in("rsi") MSG.as_ptr(), // rsi is `buf *` (second argument)
+        written = out(reg) written,
+    );
+}
+
+assert_eq!(written, MSG.len());
+Output:
+
+Hello, world!
+Playground link.
+
+In the above, a statement such as LEN = const MSG.len() populates the format specifier LEN with an immediate that takes the value of MSG.len(). This can be seen in the generated assembly (the value is 14):
+
+lea     rsi, [rip + .L__unnamed_3]
+mov     rax, 1    # rax holds the syscall number
+mov     rdi, 1    # rdi is `fd` (first argument)
+mov     rdx, 14   # rdx is `count` (third argument)
+syscall # invoke the syscall
+mov     rax, rax  # save the return value
+See the reference for more details.
+
+Safely addressing unsafe statics
+This code is now allowed:
+
+static mut STATIC_MUT: Type = Type::new();
+extern "C" {
+    static EXTERN_STATIC: Type;
+}
+fn main() {
+     let static_mut_ptr = &raw mut STATIC_MUT;
+     let extern_static_ptr = &raw const EXTERN_STATIC;
+}
+In an expression context, STATIC_MUT and EXTERN_STATIC are place expressions. Previously, the compiler's safety checks were not aware that the raw ref operator did not actually affect the operand's place, treating it as a possible read or write to a pointer. No unsafety is actually present, however, as it just creates a pointer.
+
+Relaxing this may cause problems where some unsafe blocks are now reported as unused if you deny the unused_unsafe lint, but they are now only useful on older versions. Annotate these unsafe blocks with #[allow(unused_unsafe)] if you wish to support multiple versions of Rust, as in this example diff:
+
+ static mut STATIC_MUT: Type = Type::new();
+ fn main() {
++    #[allow(unused_unsafe)]
+     let static_mut_ptr = unsafe { std::ptr::addr_of_mut!(STATIC_MUT) };
+ }
+A future version of Rust is expected to generalize this to other expressions which would be safe in this position, not just statics.
+
+Stabilized APIs
+std::thread::Builder::spawn_unchecked
+std::str::CharIndices::offset
+std::option::Option::is_none_or
+[T]::is_sorted
+[T]::is_sorted_by
+[T]::is_sorted_by_key
+Iterator::is_sorted
+Iterator::is_sorted_by
+Iterator::is_sorted_by_key
+std::future::Ready::into_inner
+std::iter::repeat_n
+impl<T: Clone> DoubleEndedIterator for Take<Repeat<T>>
+impl<T: Clone> ExactSizeIterator for Take<Repeat<T>>
+impl<T: Clone> ExactSizeIterator for Take<RepeatWith<T>>
+impl Default for std::collections::binary_heap::Iter
+impl Default for std::collections::btree_map::RangeMut
+impl Default for std::collections::btree_map::ValuesMut
+impl Default for std::collections::vec_deque::Iter
+impl Default for std::collections::vec_deque::IterMut
+Rc<T>::new_uninit
+Rc<MaybeUninit<T>>::assume_init
+Rc<[T]>::new_uninit_slice
+Rc<[MaybeUninit<T>]>::assume_init
+Arc<T>::new_uninit
+Arc<MaybeUninit<T>>::assume_init
+Arc<[T]>::new_uninit_slice
+Arc<[MaybeUninit<T>]>::assume_init
+Box<T>::new_uninit
+Box<MaybeUninit<T>>::assume_init
+Box<[T]>::new_uninit_slice
+Box<[MaybeUninit<T>]>::assume_init
+core::arch::x86_64::_bextri_u64
+core::arch::x86_64::_bextri_u32
+core::arch::x86::_mm_broadcastsi128_si256
+core::arch::x86::_mm256_stream_load_si256
+core::arch::x86::_tzcnt_u16
+core::arch::x86::_mm_extracti_si64
+core::arch::x86::_mm_inserti_si64
+core::arch::x86::_mm_storeu_si16
+core::arch::x86::_mm_storeu_si32
+core::arch::x86::_mm_storeu_si64
+core::arch::x86::_mm_loadu_si16
+core::arch::x86::_mm_loadu_si32
+core::arch::wasm32::u8x16_relaxed_swizzle
+core::arch::wasm32::i8x16_relaxed_swizzle
+core::arch::wasm32::i32x4_relaxed_trunc_f32x4
+core::arch::wasm32::u32x4_relaxed_trunc_f32x4
+core::arch::wasm32::i32x4_relaxed_trunc_f64x2_zero
+core::arch::wasm32::u32x4_relaxed_trunc_f64x2_zero
+core::arch::wasm32::f32x4_relaxed_madd
+core::arch::wasm32::f32x4_relaxed_nmadd
+core::arch::wasm32::f64x2_relaxed_madd
+core::arch::wasm32::f64x2_relaxed_nmadd
+core::arch::wasm32::i8x16_relaxed_laneselect
+core::arch::wasm32::u8x16_relaxed_laneselect
+core::arch::wasm32::i16x8_relaxed_laneselect
+core::arch::wasm32::u16x8_relaxed_laneselect
+core::arch::wasm32::i32x4_relaxed_laneselect
+core::arch::wasm32::u32x4_relaxed_laneselect
+core::arch::wasm32::i64x2_relaxed_laneselect
+core::arch::wasm32::u64x2_relaxed_laneselect
+core::arch::wasm32::f32x4_relaxed_min
+core::arch::wasm32::f32x4_relaxed_max
+core::arch::wasm32::f64x2_relaxed_min
+core::arch::wasm32::f64x2_relaxed_max
+core::arch::wasm32::i16x8_relaxed_q15mulr
+core::arch::wasm32::u16x8_relaxed_q15mulr
+core::arch::wasm32::i16x8_relaxed_dot_i8x16_i7x16
+core::arch::wasm32::u16x8_relaxed_dot_i8x16_i7x16
+core::arch::wasm32::i32x4_relaxed_dot_i8x16_i7x16_add
+core::arch::wasm32::u32x4_relaxed_dot_i8x16_i7x16_add
+These APIs are now stable in const contexts:
+
+std::task::Waker::from_raw
+std::task::Context::from_waker
+std::task::Context::waker
+$integer::from_str_radix
+std::num::ParseIntError::kind

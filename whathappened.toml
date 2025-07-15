@@ -1,0 +1,73 @@
+# WhatHappened Configuration
+# This file configures the event logging system
+
+[general]
+# Default log level (Off, Fatal, Error, Warn, Info, Debug, Trace)
+level = "Info"
+
+# Enable panic handler
+panic_handler = true
+
+# Event buffer size (number of events)
+buffer_size = 10000
+
+[console]
+# Enable console output
+enabled = true
+
+# Use colors in console output
+use_color = true
+
+# Output to stderr for errors, stdout for others
+split_output = true
+
+[file]
+# Enable file output
+enabled = false
+
+# Log file path (relative to working directory)
+path = "logs/http3.log"
+
+# Maximum file size before rotation (in MB)
+max_size = 100
+
+# Number of rotated files to keep
+max_files = 5
+
+# Append to existing file
+append = true
+
+[json]
+# Enable JSON output
+enabled = false
+
+# JSON output file
+path = "logs/http3.json"
+
+# Pretty print JSON
+pretty = false
+
+[performance]
+# Enable performance tracking
+enabled = true
+
+# Minimum duration to log (in milliseconds)
+min_duration_ms = 10
+
+# Sample rate for high-frequency events (0.0-1.0)
+sample_rate = 1.0
+
+[filtering]
+# Module-specific filters
+# Format: "module_path" = "level"
+[filtering.modules]
+"http3::quic" = "Debug"
+"http3::crypto" = "Info"
+"http3::network" = "Debug"
+
+# Event kind filters
+[filtering.kinds]
+"Network" = "Debug"
+"Crypto" = "Info"
+"Protocol" = "Debug"
+"Performance" = "Info"

@@ -1,0 +1,137 @@
+What's in 1.80.0 stable
+LazyCell and LazyLock
+These "lazy" types delay the initialization of their data until first access. They are similar to the OnceCell and OnceLock types stabilized in 1.70, but with the initialization function included in the cell. This completes the stabilization of functionality adopted into the standard library from the popular lazy_static and once_cell crates.
+
+LazyLock is the thread-safe option, making it suitable for places like static values. For example, both the spawn thread and the main scope will see the exact same duration below, since LAZY_TIME will be initialized once, by whichever ends up accessing the static first. Neither use has to know how to initialize it, unlike they would with OnceLock::get_or_init().
+
+use std::sync::LazyLock;
+use std::time::Instant;
+
+static LAZY_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+fn main() {
+    let start = Instant::now();
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            println!("Thread lazy time is {:?}", LAZY_TIME.duration_since(start));
+        });
+        println!("Main lazy time is {:?}", LAZY_TIME.duration_since(start));
+    });
+}
+LazyCell does the same thing without thread synchronization, so it doesn't implement Sync, which is needed for static, but it can still be used in thread_local! statics (with distinct initialization per thread). Either type can also be used in other data structures as well, depending on thread-safety needs, so lazy initialization is available everywhere!
+
+Checked cfg names and values
+In 1.79, rustc stabilized a --check-cfg flag, and now Cargo 1.80 is enabling those checks for all cfg names and values that it knows (in addition to the well known names and values from rustc). This includes feature names from Cargo.toml as well as new cargo::rustc-check-cfg output from build scripts.
+
+Unexpected cfgs are reported by the warn-by-default unexpected_cfgs lint, which is meant to catch typos or other misconfiguration. For example, in a project with an optional rayon dependency, this code is configured for the wrong feature value:
+
+fn main() {
+    println!("Hello, world!");
+
+    #[cfg(feature = "crayon")]
+    rayon::join(
+        || println!("Hello, Thing One!"),
+        || println!("Hello, Thing Two!"),
+    );
+}
+warning: unexpected `cfg` condition value: `crayon`
+ --> src/main.rs:4:11
+  |
+4 |     #[cfg(feature = "crayon")]
+  |           ^^^^^^^^^^--------
+  |                     |
+  |                     help: there is a expected value with a similar name: `"rayon"`
+  |
+  = note: expected values for `feature` are: `rayon`
+  = help: consider adding `crayon` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+The same warning is reported regardless of whether the actual rayon feature is enabled or not.
+
+The [lints] table in the Cargo.toml manifest can also be used to extend the list of known names and values for custom cfg. rustc automatically provides the syntax to use in the warning.
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(foo, values("bar"))'] }
+You can read more about this feature in a previous blog post announcing the availability of the feature on nightly.
+
+Exclusive ranges in patterns
+Rust ranged patterns can now use exclusive endpoints, written a..b or ..b similar to the Range and RangeTo expression types. For example, the following patterns can now use the same constants for the end of one pattern and the start of the next:
+
+pub fn size_prefix(n: u32) -> &'static str {
+    const K: u32 = 10u32.pow(3);
+    const M: u32 = 10u32.pow(6);
+    const G: u32 = 10u32.pow(9);
+    match n {
+        ..K => "",
+        K..M => "k",
+        M..G => "M",
+        G.. => "G",
+    }
+}
+Previously, only inclusive (a..=b or ..=b) or open (a..) ranges were allowed in patterns, so code like this would require separate constants for inclusive endpoints like K - 1.
+
+Exclusive ranges have been implemented as an unstable feature for a long time, but the blocking concern was that they might add confusion and increase the chance of off-by-one errors in patterns. To that end, exhaustiveness checking has been enhanced to better detect gaps in pattern matching, and new lints non_contiguous_range_endpoints and overlapping_range_endpoints will help detect cases where you might want to switch exclusive patterns to inclusive, or vice versa.
+
+Stabilized APIs
+impl Default for Rc<CStr>
+impl Default for Rc<str>
+impl Default for Rc<[T]>
+impl Default for Arc<str>
+impl Default for Arc<CStr>
+impl Default for Arc<[T]>
+impl IntoIterator for Box<[T]>
+impl FromIterator<String> for Box<str>
+impl FromIterator<char> for Box<str>
+LazyCell
+LazyLock
+Duration::div_duration_f32
+Duration::div_duration_f64
+Option::take_if
+Seek::seek_relative
+BinaryHeap::as_slice
+NonNull::offset
+NonNull::byte_offset
+NonNull::add
+NonNull::byte_add
+NonNull::sub
+NonNull::byte_sub
+NonNull::offset_from
+NonNull::byte_offset_from
+NonNull::read
+NonNull::read_volatile
+NonNull::read_unaligned
+NonNull::write
+NonNull::write_volatile
+NonNull::write_unaligned
+NonNull::write_bytes
+NonNull::copy_to
+NonNull::copy_to_nonoverlapping
+NonNull::copy_from
+NonNull::copy_from_nonoverlapping
+NonNull::replace
+NonNull::swap
+NonNull::drop_in_place
+NonNull::align_offset
+<[T]>::split_at_checked
+<[T]>::split_at_mut_checked
+str::split_at_checked
+str::split_at_mut_checked
+str::trim_ascii
+str::trim_ascii_start
+str::trim_ascii_end
+<[u8]>::trim_ascii
+<[u8]>::trim_ascii_start
+<[u8]>::trim_ascii_end
+Ipv4Addr::BITS
+Ipv4Addr::to_bits
+Ipv4Addr::from_bits
+Ipv6Addr::BITS
+Ipv6Addr::to_bits
+Ipv6Addr::from_bits
+Vec::<[T; N]>::into_flattened
+<[[T; N]]>::as_flattened
+<[[T; N]]>::as_flattened_mut
+These APIs are now stable in const contexts:
+
+<[T]>::last_chunk
+BinaryHeap::new

@@ -1,0 +1,167 @@
+What's in 1.85.0 stable
+Rust 2024
+We are excited to announce that the Rust 2024 Edition is now stable! Editions are a mechanism for opt-in changes that may otherwise pose a backwards compatibility risk. See the edition guide for details on how this is achieved, and detailed instructions on how to migrate.
+
+This is the largest edition we have released. The edition guide contains detailed information about each change, but as a summary, here are all the changes:
+
+Language
+RPIT lifetime capture rules — Changes the default capturing of parameters by impl Trait types when use<..> is not present.
+if let temporary scope — Changes the scope of temporaries for if let expressions.
+Tail expression temporary scope — Changes the scope of temporaries for the tail expression in a block.
+Match ergonomics reservations — Disallow some pattern combinations to avoid confusion and allow for future improvements.
+Unsafe extern blocks — extern blocks now require the unsafe keyword.
+Unsafe attributes — The export_name, link_section, and no_mangle attributes must now be marked as unsafe.
+unsafe_op_in_unsafe_fn warning — The unsafe_op_in_unsafe_fn lint now warns by default, requiring explicit unsafe {} blocks in unsafe functions.
+Disallow references to static mut — References to static mut items now generate a deny-by-default error.
+Never type fallback change — Changes to how the never type ! coerces, and changes the never_type_fallback_flowing_into_unsafe lint level to "deny".
+Macro fragment specifiers — The expr macro fragment specifier in macro_rules! macros now also matches const and _ expressions.
+Missing macro fragment specifiers — The missing_fragment_specifier lint is now a hard error, rejecting macro meta variables without a fragment specifier kind.
+gen keyword — Reserves the gen keyword in anticipation of adding generator blocks in the future.
+Reserved syntax — Reserves #"foo"# style strings and ## tokens in anticipation of changing how guarded string literals may be parsed in the future.
+Standard library
+Changes to the prelude — Adds Future and IntoFuture to the prelude.
+Add IntoIterator for Box<[T]> — Changes how iterators work with boxed slices.
+Newly unsafe functions — std::env::set_var, std::env::remove_var, and std::os::unix::process::CommandExt::before_exec are now unsafe functions.
+Cargo
+Cargo: Rust-version aware resolver — Changes the default dependency resolver behavior to consider the rust-version field.
+Cargo: Table and key name consistency — Removes some outdated Cargo.toml keys.
+Cargo: Reject unused inherited default-features — Changes how default-features = false works with inherited workspace dependencies.
+Rustdoc
+Rustdoc combined tests — Doctests are now combined into a single executable, significantly improving performance.
+Rustdoc nested include! change — Changes to the relative path behavior of nested include! files.
+Rustfmt
+Rustfmt: Style edition — Introduces the concept of "style editions", which allow you to independently control the formatting edition from the Rust edition.
+Rustfmt: Formatting fixes — A large number of fixes to formatting various situations.
+Rustfmt: Raw identifier sorting — Changes to how r#foo identifiers are sorted.
+Rustfmt: Version sorting — Changes to how identifiers that contain integers are sorted.
+Migrating to 2024
+The guide includes migration instructions for all new features, and in general transitioning an existing project to a new edition. In many cases cargo fix can automate the necessary changes. You may even find that no changes in your code are needed at all for 2024!
+
+Note that automatic fixes via cargo fix are very conservative to avoid ever changing the semantics of your code. In many cases you may wish to keep your code the same and use the new semantics of Rust 2024; for instance, continuing to use the expr macro matcher, and ignoring the conversions of conditionals because you want the new 2024 drop order semantics. The result of cargo fix should not be considered a recommendation, just a conservative conversion that preserves behavior.
+
+Many people came together to create this edition. We'd like to thank them all for their hard work!
+
+async closures
+Rust now supports asynchronous closures like async || {} which return futures when called. This works like an async fn which can also capture values from the local environment, just like the difference between regular closures and functions. This also comes with 3 analogous traits in the standard library prelude: AsyncFn, AsyncFnMut, and AsyncFnOnce.
+
+In some cases, you could already approximate this with a regular closure and an asynchronous block, like || async {}. However, the future returned by such an inner block is not able to borrow from the closure captures, but this does work with async closures:
+
+let mut vec: Vec<String> = vec![];
+
+let closure = async || {
+    vec.push(ready(String::from("")).await);
+};
+It also has not been possible to properly express higher-ranked function signatures with the Fn traits returning a Future, but you can write this with the AsyncFn traits:
+
+use core::future::Future;
+async fn f<Fut>(_: impl for<'a> Fn(&'a u8) -> Fut)
+where
+    Fut: Future<Output = ()>,
+{ todo!() }
+
+async fn f2(_: impl for<'a> AsyncFn(&'a u8))
+{ todo!() }
+
+async fn main() {
+    async fn g(_: &u8) { todo!() }
+    f(g).await;
+    //~^ ERROR mismatched types
+    //~| ERROR one type is more general than the other
+
+    f2(g).await; // ok!
+}
+So async closures provide first-class solutions to both of these problems! See RFC 3668 and the stabilization report for more details.
+
+Hiding trait implementations from diagnostics
+The new #[diagnostic::do_not_recommend] attribute is a hint to the compiler to not show the annotated trait implementation as part of a diagnostic message. For library authors, this is a way to keep the compiler from making suggestions that may be unhelpful or misleading. For example:
+
+pub trait Foo {}
+pub trait Bar {}
+
+impl<T: Foo> Bar for T {}
+
+struct MyType;
+
+fn main() {
+    let _object: &dyn Bar = &MyType;
+}
+error[E0277]: the trait bound `MyType: Bar` is not satisfied
+ --> src/main.rs:9:29
+  |
+9 |     let _object: &dyn Bar = &MyType;
+  |                             ^^^^ the trait `Foo` is not implemented for `MyType`
+  |
+note: required for `MyType` to implement `Bar`
+ --> src/main.rs:4:14
+  |
+4 | impl<T: Foo> Bar for T {}
+  |         ---  ^^^     ^
+  |         |
+  |         unsatisfied trait bound introduced here
+  = note: required for the cast from `&MyType` to `&dyn Bar`
+For some APIs, it might make good sense for you to implement Foo, and get Bar indirectly by that blanket implementation. For others, it might be expected that most users should implement Bar directly, so that Foo suggestion is a red herring. In that case, adding the diagnostic hint will change the error message like so:
+
+#[diagnostic::do_not_recommend]
+impl<T: Foo> Bar for T {}
+error[E0277]: the trait bound `MyType: Bar` is not satisfied
+  --> src/main.rs:10:29
+   |
+10 |     let _object: &dyn Bar = &MyType;
+   |                             ^^^^ the trait `Bar` is not implemented for `MyType`
+   |
+   = note: required for the cast from `&MyType` to `&dyn Bar`
+See RFC 2397 for the original motivation, and the current reference for more details.
+
+FromIterator and Extend for tuples
+Earlier versions of Rust implemented convenience traits for iterators of (T, U) tuple pairs to behave like Iterator::unzip, with Extend in 1.56 and FromIterator in 1.79. These have now been extended to more tuple lengths, from singleton (T,) through to 12 items long, (T1, T2, .., T11, T12). For example, you can now use collect() to fanout into multiple collections at once:
+
+use std::collections::{LinkedList, VecDeque};
+fn main() {
+    let (squares, cubes, tesseracts): (Vec<_>, VecDeque<_>, LinkedList<_>) =
+        (0i32..10).map(|i| (i * i, i.pow(3), i.pow(4))).collect();
+    println!("{squares:?}");
+    println!("{cubes:?}");
+    println!("{tesseracts:?}");
+}
+[0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
+[0, 1, 8, 27, 64, 125, 216, 343, 512, 729]
+[0, 1, 16, 81, 256, 625, 1296, 2401, 4096, 6561]
+Updates to std::env::home_dir()
+std::env::home_dir() has been deprecated for years, because it can give surprising results in some Windows configurations if the HOME environment variable is set (which is not the normal configuration on Windows). We had previously avoided changing its behavior, out of concern for compatibility with code depending on this non-standard configuration. Given how long this function has been deprecated, we're now updating its behavior as a bug fix, and a subsequent release will remove the deprecation for this function.
+
+Stabilized APIs
+BuildHasherDefault::new
+ptr::fn_addr_eq
+io::ErrorKind::QuotaExceeded
+io::ErrorKind::CrossesDevices
+{float}::midpoint
+Unsigned {integer}::midpoint
+NonZeroU*::midpoint
+impl std::iter::Extend for tuples with arity 1 through 12
+FromIterator<(A, ...)> for tuples with arity 1 through 12
+std::task::Waker::noop
+These APIs are now stable in const contexts
+
+mem::size_of_val
+mem::align_of_val
+Layout::for_value
+Layout::align_to
+Layout::pad_to_align
+Layout::extend
+Layout::array
+std::mem::swap
+std::ptr::swap
+NonNull::new
+HashMap::with_hasher
+HashSet::with_hasher
+BuildHasherDefault::new
+<float>::recip
+<float>::to_degrees
+<float>::to_radians
+<float>::max
+<float>::min
+<float>::clamp
+<float>::abs
+<float>::signum
+<float>::copysign
+MaybeUninit::write

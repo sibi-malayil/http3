@@ -1,0 +1,5 @@
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# Rust 1.85+ required for edition 2024 and modern features
+# This ensures consistent builds across all developers
