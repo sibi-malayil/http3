@@ -8,14 +8,14 @@ use crate::{
     error::{Error, Result, Http3ErrorCode},
     util::{varint::VarInt, buffer::{BufExt, BufMutExt}},
     quic::stream::StreamId,
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    protocol_event,
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
-    collections::{HashMap, BTreeMap, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::sync::{RwLock, Mutex};
 

@@ -5,20 +5,20 @@
 
 use crate::{
     error::{Error, Result, Http3ErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error_context::ErrorConversion,
     http3::{
-        frame::{Http3Frame, Http3FrameType, PushPromiseFrame, CancelPushFrame, MaxPushIdFrame},
         settings::Settings,
         priority::PriorityUpdateFrame,
-        server_push::{ServerPushManager, ServerPushConfig, PushPromise, PushStreamState},
+        frame::{Http3Frame, PushPromiseFrame, CancelPushFrame, MaxPushIdFrame},
+        server_push::{ServerPushManager, ServerPushConfig, PushPromise},
+        webtransport::HeaderField,
         ConnectionRole, StreamType,
     },
-    qpack::field::{HeaderField, HeaderName, HeaderValue},
     util::varint::VarInt,
     whathappened::Level,
     protocol_event,
 };
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -202,13 +202,13 @@ impl ConnectionManager {
                 self.process_data_frame(stream_id, data_frame).await
             }
             Http3Frame::Headers(headers_frame) => {
-                self.process_headers_frame(stream_id, headers_frame).await
+                self.process_headers_frame(stream_id, headers_frame)
             }
             Http3Frame::Settings(settings_frame) => {
                 self.process_settings_frame(stream_id, settings_frame).await
             }
             Http3Frame::PushPromise(push_promise_frame) => {
-                self.process_push_promise_frame(stream_id, push_promise_frame).await
+                self.process_push_promise_frame(stream_id, push_promise_frame)
             }
             Http3Frame::CancelPush(cancel_push_frame) => {
                 self.process_cancel_push_frame(stream_id, cancel_push_frame).await
@@ -217,10 +217,10 @@ impl ConnectionManager {
                 self.process_max_push_id_frame(stream_id, max_push_id_frame).await
             }
             Http3Frame::PriorityUpdate(priority_frame) => {
-                self.process_priority_update_frame(stream_id, priority_frame).await
+                self.process_priority_update_frame(stream_id, priority_frame)
             }
             Http3Frame::Goaway(goaway_frame) => {
-                self.process_goaway_frame(stream_id, goaway_frame).await
+                self.process_goaway_frame(stream_id, goaway_frame)
             }
             Http3Frame::MaxStreams(max_streams_frame) => {
                 self.process_max_streams_frame(stream_id, max_streams_frame).await
@@ -232,7 +232,7 @@ impl ConnectionManager {
                 self.process_datagram_frame(stream_id, datagram_frame).await
             }
             Http3Frame::Unknown { frame_type, payload } => {
-                self.process_unknown_frame(stream_id, frame_type, payload).await
+                self.process_unknown_frame(stream_id, frame_type, payload)
             }
         }
     }
@@ -460,7 +460,7 @@ impl ConnectionManager {
         Ok(Vec::new()) // No response frames
     }
 
-    async fn process_headers_frame(&self, stream_id: u64, headers_frame: crate::http3::frame::HeadersFrame) -> Result<Vec<Http3Frame>> {
+    fn process_headers_frame(&self, stream_id: u64, headers_frame: crate::http3::frame::HeadersFrame) -> Result<Vec<Http3Frame>> {
         // This is a placeholder - in practice, would decode QPACK headers
         protocol_event!(
             Level::Debug,
@@ -488,7 +488,7 @@ impl ConnectionManager {
         Ok(Vec::new()) // No response frames
     }
 
-    async fn process_push_promise_frame(&self, stream_id: u64, push_promise_frame: PushPromiseFrame) -> Result<Vec<Http3Frame>> {
+    fn process_push_promise_frame(&self, stream_id: u64, push_promise_frame: PushPromiseFrame) -> Result<Vec<Http3Frame>> {
         if self.role != ConnectionRole::Client {
             return Err("Only clients can receive push promises"
                 .to_http3_error(Http3ErrorCode::FrameUnexpected));
@@ -524,7 +524,7 @@ impl ConnectionManager {
         Ok(Vec::new())
     }
 
-    async fn process_priority_update_frame(&self, stream_id: u64, _priority_frame: PriorityUpdateFrame) -> Result<Vec<Http3Frame>> {
+    fn process_priority_update_frame(&self, stream_id: u64, _priority_frame: PriorityUpdateFrame) -> Result<Vec<Http3Frame>> {
         protocol_event!(
             Level::Debug,
             "Processed PRIORITY_UPDATE frame";
@@ -534,7 +534,7 @@ impl ConnectionManager {
         Ok(Vec::new())
     }
 
-    async fn process_goaway_frame(&self, stream_id: u64, goaway_frame: crate::http3::frame::GoawayFrame) -> Result<Vec<Http3Frame>> {
+    fn process_goaway_frame(&self, stream_id: u64, goaway_frame: crate::http3::frame::GoawayFrame) -> Result<Vec<Http3Frame>> {
         protocol_event!(
             Level::Warn,
             "Received GOAWAY frame";
@@ -545,7 +545,7 @@ impl ConnectionManager {
         Ok(Vec::new())
     }
 
-    async fn process_unknown_frame(&self, stream_id: u64, frame_type: VarInt, payload: Bytes) -> Result<Vec<Http3Frame>> {
+    fn process_unknown_frame(&self, stream_id: u64, frame_type: VarInt, payload: Bytes) -> Result<Vec<Http3Frame>> {
         protocol_event!(
             Level::Debug,
             "Processed unknown frame";

@@ -5,19 +5,19 @@
 
 use crate::{
     error::{Error, Result, QpackErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error_context::ErrorConversion,
     qpack::{
-        Config, EncoderInstruction, DecoderInstruction,
         field::{HeaderField, HeaderName, HeaderValue},
         table::{DynamicTable, StaticTable},
-        dynamic_table_manager::DynamicTableManager,
         StringLiteral,
+        EncoderInstruction,
+        DecoderInstruction,
     },
     util::varint::VarInt,
     whathappened::Level,
     protocol_event,
 };
-use bytes::{Bytes, BytesMut, Buf};
+use bytes::{Bytes, Buf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -219,7 +219,7 @@ impl DecoderInstructionProcessor {
     pub async fn process_stream(&self, data: &mut Bytes) -> Result<()> {
         while !data.is_empty() {
             let instruction = self.decode_instruction(data)?;
-            self.process_instruction(instruction).await?;
+            self.process_instruction(instruction)?;
         }
         
         Ok(())
@@ -249,7 +249,7 @@ impl DecoderInstructionProcessor {
     }
 
     /// Process a decoder instruction
-    async fn process_instruction(&self, instruction: DecoderInstruction) -> Result<()> {
+    fn process_instruction(&self, instruction: DecoderInstruction) -> Result<()> {
         use DecoderInstruction::*;
         
         match instruction {

@@ -14,8 +14,8 @@ use crate::{
         connection::Connection as QuicConnection,
         stream::StreamId,
     },
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    {protocol_event, span},
 };
 use bytes::{Buf, Bytes, BytesMut};
 use std::{

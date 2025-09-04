@@ -4,10 +4,10 @@
 //! with insertions, evictions, and synchronization with the decoder.
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     qpack::{
         Config, EncoderInstruction, StringLiteral, StringEncoding,
-        field::{HeaderField, HeaderName, HeaderValue},
+        field::HeaderField,
         table::{DynamicTable, StaticTable},
         dynamic_table_manager::{DynamicTableManager, InsertionPolicy},
         huffman,
@@ -18,7 +18,7 @@ use crate::{
 };
 use bytes::{Bytes, BytesMut, BufMut};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::Arc,
 };
 use tokio::sync::RwLock;
@@ -96,7 +96,7 @@ impl EnhancedEncoder {
         }
 
         // Encode header block prefix
-        self.encode_header_block_prefix(&mut buf, required_insert_count, 0).await?;
+        self.encode_header_block_prefix(&mut buf, required_insert_count, 0)?;
 
         // Second pass: encode fields
         for field in fields {
@@ -132,7 +132,7 @@ impl EnhancedEncoder {
     }
 
     /// Encode header block prefix
-    async fn encode_header_block_prefix(
+    fn encode_header_block_prefix(
         &self,
         buf: &mut BytesMut,
         required_insert_count: u64,

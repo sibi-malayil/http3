@@ -12,7 +12,7 @@
 //! - Packet loss tolerance
 
 use crate::{
-    error::{Error, Result, ConnectionErrorCode},
+    error::{Result, ConnectionErrorCode},
     error_context::ErrorConversion,
     quic::{
         packet::{ConnectionId},
@@ -24,7 +24,7 @@ use crate::{
     protocol_event,
 };
 use bytes::Bytes;
-use std::collections::{VecDeque, HashMap};
+use std::collections::VecDeque;
 
 /// Maximum datagram size for unreliable delivery
 const MAX_UNRELIABLE_DATAGRAM_SIZE: usize = 1200;

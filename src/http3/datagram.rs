@@ -8,11 +8,10 @@
 //! where reliability is less important than speed.
 
 use crate::{
-    error::{Error, Result, Http3ErrorCode},
+    error::{Result, Http3ErrorCode},
     error_context::ErrorConversion,
     http3::frame::{DatagramFrame, Http3Frame},
-    quic::stream::{StreamId, StreamType},
-    quic::connection::ConnectionRole,
+    quic::stream::StreamId,
     util::time::Instant,
     whathappened::Level,
     protocol_event,
@@ -375,7 +374,6 @@ mod tests {
     #[test]
     fn test_send_datagram() {
         let mut manager = DatagramManager::default();
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"Hello, World!");
 
         let result = manager.send_datagram(stream_id, data);
@@ -391,7 +389,6 @@ mod tests {
             ..Default::default()
         };
         let mut manager = DatagramManager::new(config);
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let large_data = Bytes::from(vec![0u8; 20]);
 
         let result = manager.send_datagram(stream_id, large_data);
@@ -409,7 +406,6 @@ mod tests {
             ..Default::default()
         };
         let mut manager = DatagramManager::new(config);
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"test");
 
         // Fill queue
@@ -426,7 +422,6 @@ mod tests {
     #[test]
     fn test_next_datagram_frame() {
         let mut manager = DatagramManager::default();
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"Hello, World!");
 
         // Queue a datagram
@@ -455,7 +450,6 @@ mod tests {
             ..Default::default()
         };
         let mut manager = DatagramManager::new(config);
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"test");
 
         assert!(!manager.is_enabled());
@@ -466,7 +460,6 @@ mod tests {
     #[test]
     fn test_receive_datagram() {
         let mut manager = DatagramManager::default();
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"Received data");
         let frame = DatagramFrame::new(data.clone());
 
@@ -487,7 +480,6 @@ mod tests {
     #[test]
     fn test_clear_pending_datagrams() {
         let mut manager = DatagramManager::default();
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"test");
 
         // Queue some datagrams
@@ -504,7 +496,6 @@ mod tests {
     #[test]
     fn test_statistics() {
         let mut manager = DatagramManager::default();
-        let stream_id = StreamId::new(4, StreamType::Bidirectional, ConnectionRole::Client).unwrap();
         let data = Bytes::from_static(b"test data");
 
         // Send some datagrams

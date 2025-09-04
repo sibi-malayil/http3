@@ -3,14 +3,13 @@
 //! Implements ACK frame generation according to RFC 9000 Section 13.2.
 
 use crate::{
-    error::{Error, Result},
     quic::{
         frame_types::{Frame, AckRange, EcnCounts},
         recovery::PacketNumberSpace,
     },
     util::time::{Duration, Instant},
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    {protocol_event, span},
 };
 use std::collections::BTreeSet;
 

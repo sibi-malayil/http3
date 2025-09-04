@@ -1,4 +1,5 @@
 #![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 #![warn(
     clippy::all,
     clippy::pedantic,
@@ -11,7 +12,9 @@
     clippy::module_name_repetitions,
     clippy::similar_names,
     clippy::too_many_lines,
-    clippy::type_complexity
+    clippy::type_complexity,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc
 )]
 
 //! # HTTP/3 Implementation

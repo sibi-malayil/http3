@@ -297,8 +297,10 @@ impl CubicController {
         protocol_event!(
             Level::Warn,
             "CUBIC persistent congestion reset";
+            "timestamp" => format!("{:?}", now),
             "new_cwnd" => self.cwnd,
-            "new_ssthresh" => self.ssthresh
+            "new_ssthresh" => self.ssthresh,
+            "elapsed_since_last_event" => self.epoch_start.map(|t| now.duration_since(t).as_millis()).unwrap_or(0)
         );
     }
 

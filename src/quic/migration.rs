@@ -8,14 +8,13 @@ use crate::{
     whathappened::Level,
     protocol_event,
 };
-use bytes::{Bytes, BytesMut};
 use std::{
     net::SocketAddr,
     time::{Duration, Instant},
     collections::HashMap,
+    sync::Arc,
 };
 use tokio::sync::Mutex;
-use std::sync::Arc;
 
 /// Path state for connection migration
 #[derive(Debug, Clone, PartialEq)]

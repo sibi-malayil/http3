@@ -128,7 +128,7 @@ impl ClientConnection {
         // Send body if provided
         if let Some(body) = body {
             let mut stream = stream.lock().await;
-            stream.send_data(body).await?;
+            stream.send_data(body)?;
         }
         
         // Create response

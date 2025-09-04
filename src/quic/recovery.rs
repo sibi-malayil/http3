@@ -4,14 +4,14 @@
 
 use crate::{
     quic::{
-        packet::{Packet, PacketType, PacketHeader},
+        packet::{Packet, PacketType},
         frame_types::Frame,
         congestion::CongestionController,
         ack_manager::AckManager,
     },
     util::time::{Duration, Instant},
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, perf_event, span, time_block},
+    whathappened::Level,
+    {perf_event, span},
 };
 use std::collections::BTreeMap;
 
@@ -203,6 +203,8 @@ impl RttEstimator {
             "adjusted_rtt_us" => adjusted_rtt.as_micros(),
             "smoothed_rtt_us" => self.smoothed_rtt.as_micros(),
             "rtt_var_us" => self.rtt_var.as_micros(),
+            "old_rtt_var_us" => old_rtt_var.as_micros(),
+            "rtt_var_change_us" => (self.rtt_var.as_micros() as i128 - old_rtt_var.as_micros() as i128),
             "rtt_var_sample_us" => rtt_var_sample.as_micros()
         );
     }
@@ -1043,6 +1045,17 @@ impl RecoveryManager {
         for (idx, ack_manager) in self.ack_managers.iter_mut().enumerate() {
             if ack_manager.should_send_ack(now) {
                 if let Some(ack_frame) = ack_manager.generate_ack_frame(now) {
+                    perf_event!(
+                        Level::Debug,
+                        "Generating ACK frame";
+                        "space_index" => idx,
+                        "packet_number_space" => match idx {
+                            0 => "Initial",
+                            1 => "Handshake",
+                            2 => "Application",
+                            _ => "Unknown"
+                        }
+                    );
                     ack_frames.push(ack_frame);
                 }
             }

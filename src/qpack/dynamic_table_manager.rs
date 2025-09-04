@@ -4,20 +4,17 @@
 //! including insertion, eviction, and synchronization between encoder and decoder.
 
 use crate::{
-    error::{Error, Result, QpackErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error::{Result, QpackErrorCode},
+    error_context::ErrorConversion,
     qpack::{
         table::DynamicTable,
-        field::{HeaderField, HeaderName, HeaderValue},
-        encoder::Encoder,
-        decoder::Decoder,
-        EncoderInstruction, DecoderInstruction,
+        field::HeaderField,
+        EncoderInstruction,
         Config,
     },
     whathappened::Level,
     protocol_event,
 };
-use bytes::{Bytes, BytesMut, BufMut};
 use std::{
     collections::{HashMap, VecDeque, HashSet},
     sync::Arc,
@@ -221,7 +218,7 @@ impl DynamicTableManager {
 
     /// Evict entries to make space for a new entry
     async fn evict_for_space(&self, required_space: usize) -> Result<()> {
-        let mut current = *self.current_size.read().await;
+        let current = *self.current_size.read().await;
         
         if current + required_space <= self.max_capacity {
             return Ok(()); // No eviction needed
@@ -411,7 +408,6 @@ pub struct TableStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::qpack::field::{HeaderName, HeaderValue};
 
     #[tokio::test]
     async fn test_dynamic_table_insertion() {

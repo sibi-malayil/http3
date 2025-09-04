@@ -9,8 +9,6 @@ use std::{
     net::SocketAddr,
     sync::Arc,
 };
-use tokio::sync::{mpsc, broadcast, RwLock};
-use std::collections::HashMap;
 
 use super::{Server, RequestHandler};
 use crate::server::listener::DefaultHandler;
@@ -118,6 +116,6 @@ impl Server {
         self.connection_rx = Some(connection_rx);
 
         // Create HTTP/3 connection
-        super::connection::ServerConnection::new(quic_conn, peer_addr).await
+        super::connection::ServerConnection::new(quic_conn, peer_addr)
     }
 }

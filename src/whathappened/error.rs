@@ -1,9 +1,9 @@
 //! Error handling with context chaining (like anyhow)
 
+use crate::whathappened::{EventBuilder, EventKind, Level};
 use std::error::Error as StdError;
 use std::fmt;
 use std::backtrace::Backtrace;
-use super::{EventBuilder, Level, EventKind};
 
 /// Error with context chain
 #[derive(Debug)]

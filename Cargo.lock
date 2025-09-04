@@ -597,6 +597,7 @@ dependencies = [
  "criterion",
  "futures",
  "getrandom 0.3.3",
+ "log",
  "mime_guess",
  "parking_lot",
  "pin-project-lite",

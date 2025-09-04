@@ -8,8 +8,10 @@ use crate::{
     util::time::{Duration, Instant},
     quic::bbr::{BBRController, BBRState as AdvancedBBRState},
     quic::cubic::{CubicController, CubicState},
+    perf_event,
+    whathappened::Level,
     quic::pacing::{PacingController, PacingConfig, PacingStats},
-    quic::ecn::{EcnController, EcnCodepoint, EcnCongestionEvent, EcnStats},
+    quic::ecn::{EcnController, EcnCongestionEvent, EcnStats},
     error::{Result, Http3ErrorCode},
     error_context::ErrorConversion,
 };
@@ -894,6 +896,11 @@ impl CongestionController {
         self.pacing_controller.is_enabled()
     }
     
+    /// Get current pacing rate
+    pub fn pacing_rate(&self) -> u64 {
+        self.pacing_controller.pacing_rate()
+    }
+    
     /// Enable/disable pacing
     pub fn set_pacing_enabled(&mut self, enabled: bool) {
         self.pacing_controller.set_enabled(enabled);
@@ -1038,6 +1045,14 @@ impl CongestionController {
     /// Update pacing rate based on congestion control algorithm
     fn update_pacing_rate(&mut self) {
         let now = Instant::now();
+        
+        perf_event!(
+            Level::Debug,
+            "Updating pacing rate";
+            "timestamp" => format!("{:?}", now),
+            "algorithm" => format!("{:?}", self.algorithm)
+        );
+        
         let pacing_rate = match self.algorithm {
             CongestionAlgorithm::NewReno => {
                 // For NewReno, base pacing on congestion window and RTT

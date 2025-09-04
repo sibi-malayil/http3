@@ -4,20 +4,19 @@
 //! push stream management, and client validation.
 
 use crate::{
-    error::{Error, Result, Http3ErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error::{Result, Http3ErrorCode},
+    error_context::ErrorConversion,
     http3::{
-        frame::{Http3Frame, PushPromiseFrame, CancelPushFrame, MaxPushIdFrame},
-        settings::Settings,
+        frame::{PushPromiseFrame, CancelPushFrame, MaxPushIdFrame},
+        webtransport::HeaderField,
     },
-    qpack::field::{HeaderField, HeaderName, HeaderValue},
     util::varint::VarInt,
     whathappened::Level,
     protocol_event,
 };
 use bytes::{Bytes, BytesMut};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -103,31 +102,31 @@ impl PushPromise {
     }
 
     /// Get the promised authority
-    pub fn authority(&self) -> Option<&str> {
+    pub fn authority(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| h.name.as_str() == ":authority")
-            .and_then(|h| h.value.as_str().ok())
+            .find(|h| String::from_utf8_lossy(&h.name) == ":authority")
+            .map(|h| String::from_utf8_lossy(&h.value).to_string())
     }
 
     /// Get the promised method
-    pub fn method(&self) -> Option<&str> {
+    pub fn method(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| h.name.as_str() == ":method")
-            .and_then(|h| h.value.as_str().ok())
+            .find(|h| String::from_utf8_lossy(&h.name) == ":method")
+            .map(|h| String::from_utf8_lossy(&h.value).to_string())
     }
 
     /// Get the promised path
-    pub fn path(&self) -> Option<&str> {
+    pub fn path(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| h.name.as_str() == ":path")
-            .and_then(|h| h.value.as_str().ok())
+            .find(|h| String::from_utf8_lossy(&h.name) == ":path")
+            .map(|h| String::from_utf8_lossy(&h.value).to_string())
     }
 
     /// Get the promised scheme
-    pub fn scheme(&self) -> Option<&str> {
+    pub fn scheme(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| h.name.as_str() == ":scheme")
-            .and_then(|h| h.value.as_str().ok())
+            .find(|h| String::from_utf8_lossy(&h.name) == ":scheme")
+            .map(|h| String::from_utf8_lossy(&h.value).to_string())
     }
 
     /// Check if this push is still active
@@ -283,11 +282,11 @@ impl ServerPushManager {
         let promise = PushPromise::new(push_id, request_stream_id, headers);
 
         // Encode headers for PUSH_PROMISE frame
-        let encoded_headers = self.encode_headers(&promise.headers).await?;
+        let encoded_headers = self.encode_headers(&promise.headers)?;
 
         // Get values for logging before moving the promise
-        let authority = promise.authority().unwrap_or("unknown").to_string();
-        let path = promise.path().unwrap_or("unknown").to_string();
+        let authority = promise.authority().unwrap_or_else(|| "unknown".to_string());
+        let path = promise.path().unwrap_or_else(|| "unknown".to_string());
 
         // Store the promise
         {
@@ -446,8 +445,8 @@ impl ServerPushManager {
                     "Started push stream";
                     "push_id" => push_id,
                     "push_stream_id" => push_stream_id,
-                    "authority" => promise.authority().unwrap_or("unknown"),
-                    "path" => promise.path().unwrap_or("unknown")
+                    "authority" => promise.authority().unwrap_or_else(|| "unknown".to_string()),
+                    "path" => promise.path().unwrap_or_else(|| "unknown".to_string())
                 );
             } else {
                 return Err("Push promise not found"
@@ -598,8 +597,8 @@ impl ServerPushManager {
         let mut has_path = false;
 
         for header in headers {
-            let name = header.name.as_str();
-            match name {
+            let name = String::from_utf8_lossy(&header.name);
+            match name.as_ref() {
                 ":method" => {
                     if has_method {
                         return Err("Duplicate :method header"
@@ -608,12 +607,8 @@ impl ServerPushManager {
                     has_method = true;
                     
                     // Only safe methods allowed for push
-                    let method = header.value.as_str()
-                        .map_err(|_| Error::Http3Error { 
-                            code: Http3ErrorCode::MessageError,
-                            reason: "Invalid method header value".to_string()
-                        })?;
-                    if !matches!(method, "GET" | "HEAD") {
+                    let method = String::from_utf8_lossy(&header.value);
+                    if !matches!(method.as_ref(), "GET" | "HEAD") {
                         return Err("Unsafe method in push promise"
                             .to_http3_error(Http3ErrorCode::MessageError));
                     }
@@ -657,15 +652,15 @@ impl ServerPushManager {
     }
 
     /// Encode headers for PUSH_PROMISE frame (placeholder - would use QPACK)
-    async fn encode_headers(&self, headers: &[HeaderField]) -> Result<Bytes> {
+    fn encode_headers(&self, headers: &[HeaderField]) -> Result<Bytes> {
         // This is a simplified implementation
         // In practice, this would use the QPACK encoder
         let mut buf = BytesMut::new();
         
         for header in headers {
             // Simple encoding: length + name + length + value
-            let name_bytes = header.name.as_bytes();
-            let value_bytes = header.value.as_bytes();
+            let name_bytes = &header.name;
+            let value_bytes = &header.value;
             
             buf.extend_from_slice(&[name_bytes.len() as u8]);
             buf.extend_from_slice(name_bytes);
@@ -683,22 +678,22 @@ mod tests {
 
     fn create_test_headers() -> Vec<HeaderField> {
         vec![
-            HeaderField::new(
-                HeaderName::from(":method"),
-                HeaderValue::from("GET"),
-            ),
-            HeaderField::new(
-                HeaderName::from(":scheme"),
-                HeaderValue::from("https"),
-            ),
-            HeaderField::new(
-                HeaderName::from(":authority"),
-                HeaderValue::from("example.com"),
-            ),
-            HeaderField::new(
-                HeaderName::from(":path"),
-                HeaderValue::from("/style.css"),
-            ),
+            HeaderField {
+                name: b":method".to_vec(),
+                value: b"GET".to_vec(),
+            },
+            HeaderField {
+                name: b":scheme".to_vec(),
+                value: b"https".to_vec(),
+            },
+            HeaderField {
+                name: b":authority".to_vec(),
+                value: b"example.com".to_vec(),
+            },
+            HeaderField {
+                name: b":path".to_vec(),
+                value: b"/style.css".to_vec(),
+            },
         ]
     }
 
@@ -768,9 +763,9 @@ mod tests {
         
         // Missing :path header
         let invalid_headers = vec![
-            HeaderField::new(HeaderName::from(":method"), HeaderValue::from("GET")),
-            HeaderField::new(HeaderName::from(":scheme"), HeaderValue::from("https")),
-            HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),
+            HeaderField { name: b":method".to_vec(), value: b"GET".to_vec() },
+            HeaderField { name: b":scheme".to_vec(), value: b"https".to_vec() },
+            HeaderField { name: b":authority".to_vec(), value: b"example.com".to_vec() },
         ];
         
         let result = manager.create_push_promise(1, invalid_headers).await;
@@ -778,10 +773,10 @@ mod tests {
         
         // Unsafe method
         let unsafe_headers = vec![
-            HeaderField::new(HeaderName::from(":method"), HeaderValue::from("POST")),
-            HeaderField::new(HeaderName::from(":scheme"), HeaderValue::from("https")),
-            HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),
-            HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/api")),
+            HeaderField { name: b":method".to_vec(), value: b"POST".to_vec() },
+            HeaderField { name: b":scheme".to_vec(), value: b"https".to_vec() },
+            HeaderField { name: b":authority".to_vec(), value: b"example.com".to_vec() },
+            HeaderField { name: b":path".to_vec(), value: b"/api".to_vec() },
         ];
         
         let result = manager.create_push_promise(1, unsafe_headers).await;
@@ -799,8 +794,8 @@ mod tests {
         
         // Start push stream
         let response_headers = vec![
-            HeaderField::new(HeaderName::from(":status"), HeaderValue::from("200")),
-            HeaderField::new(HeaderName::from("content-type"), HeaderValue::from("text/css")),
+            HeaderField { name: b":status".to_vec(), value: b"200".to_vec() },
+            HeaderField { name: b"content-type".to_vec(), value: b"text/css".to_vec() },
         ];
         
         manager.start_push_stream(push_id, 4, response_headers).await.unwrap();

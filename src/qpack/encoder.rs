@@ -5,7 +5,6 @@ use crate::qpack::{
     Config, EncoderInstruction, StringLiteral,
     field::{HeaderField, HeaderName, HeaderValue},
     table::{DynamicTable, StaticTable},
-    dynamic_table_manager::{DynamicTableManager, InsertionPolicy},
 };
 use crate::util::varint::VarInt;
 use bytes::{Bytes, BytesMut};

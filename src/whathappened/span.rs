@@ -1,6 +1,6 @@
 //! Span support for hierarchical context tracking
 
-use super::{EventBuilder, EventKind, Level};
+use crate::whathappened::{EventBuilder, EventKind, Level};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,6 +26,7 @@ pub struct SpanHandle {
 
 impl Span {
     /// Create a new span
+    #[must_use]
     pub fn new(name: impl Into<String>, target: &'static str, level: Level) -> Self {
         Self {
             id: SPAN_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
@@ -44,6 +45,7 @@ impl Span {
     }
     
     /// Enter this span
+    #[must_use]
     pub fn enter(self) -> SpanHandle {
         let span = Arc::new(self);
         
@@ -87,6 +89,7 @@ pub struct Instrumented<T> {
 }
 
 impl<T> Instrumented<T> {
+    #[must_use]
     pub fn new(inner: T, span: Span) -> Self {
         Self {
             inner,
@@ -117,6 +120,7 @@ pub struct SpanBuilder {
 }
 
 impl SpanBuilder {
+    #[must_use]
     pub fn new(name: impl Into<String>, target: &'static str) -> Self {
         Self {
             name: name.into(),
@@ -126,6 +130,7 @@ impl SpanBuilder {
         }
     }
     
+    #[must_use]
     pub fn level(mut self, level: Level) -> Self {
         self.level = level;
         self
@@ -136,6 +141,7 @@ impl SpanBuilder {
         self
     }
     
+    #[must_use]
     pub fn enter(self) -> SpanHandle {
         let mut span = Span::new(self.name, self.target, self.level);
         for (k, v) in self.fields {

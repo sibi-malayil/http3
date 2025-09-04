@@ -8,24 +8,21 @@
 //! - Stream concurrency controls
 
 use crate::{
-    error::{Error, Result, Http3ErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error::{Result, Http3ErrorCode},
+    error_context::ErrorConversion,
     http3::{
-        frame::{MaxStreamsFrame, StreamsBlockedFrame},
-        priority::{Priority, PriorityScheduler, StreamPriority},
-        connection_manager::{StreamInfo, StreamState},
+        priority::{PriorityScheduler, StreamPriority},
+        frame::MaxStreamsFrame,
         ConnectionRole,
     },
     util::varint::VarInt,
     whathappened::Level,
     protocol_event,
 };
-use bytes::{Bytes, BytesMut};
 use std::{
     collections::{HashMap, VecDeque, BTreeMap},
     sync::Arc,
     time::{Duration, Instant},
-    cmp::min,
 };
 use tokio::sync::{RwLock, Mutex, Semaphore};
 
@@ -284,14 +281,24 @@ impl StreamMultiplexer {
             Err(_) => {
                 // No permits available, queue the stream
                 let stream_id = self.allocate_stream_id(is_bidirectional).await?;
-                let urgency = priority.priority.urgency;
-                let incremental = priority.priority.incremental;
+                // Store priority details for later use in scheduling
                 let pending = PendingStream {
                     stream_id,
                     is_bidirectional,
                     priority: priority.clone(),
                     queued_at: Instant::now(),
                 };
+                
+                // Log high-priority stream queueing for monitoring
+                if priority.priority.urgency < 3 {
+                    protocol_event!(
+                        Level::Debug,
+                        "High-priority stream queued";
+                        "stream_id" => stream_id,
+                        "urgency" => priority.priority.urgency,
+                        "incremental" => priority.priority.incremental
+                    );
+                }
 
                 {
                     let mut pending_streams = self.pending_streams.lock().await;
@@ -346,7 +353,7 @@ impl StreamMultiplexer {
     }
 
     /// Send MAX_STREAMS frame to peer
-    pub async fn send_max_streams_frame(&self, is_bidirectional: bool) -> Result<MaxStreamsFrame> {
+    pub fn send_max_streams_frame(&self, is_bidirectional: bool) -> Result<MaxStreamsFrame> {
         let max_streams = if is_bidirectional {
             self.config.max_concurrent_streams_bidi
         } else {
@@ -370,8 +377,8 @@ impl StreamMultiplexer {
 
     /// Schedule streams for transmission using fair queuing
     pub async fn schedule_transmission(&self, available_bytes: usize) -> Result<Vec<(u64, usize)>> {
-        let mut scheduled = Vec::new();
-        let mut remaining_bytes = available_bytes;
+        let scheduled;
+        let remaining_bytes = available_bytes;
 
         match self.config.bandwidth_algorithm {
             BandwidthAlgorithm::WeightedFairQueuing => {
@@ -561,7 +568,7 @@ impl StreamMultiplexer {
 
         // Add to priority scheduler
         {
-            let mut scheduler = self.priority_scheduler.write().await;
+            let scheduler = self.priority_scheduler.write().await;
             scheduler.register_stream_with_priority(stream_id, priority.clone()).await.map_err(|_| {
                 "Failed to register with priority scheduler".to_http3_error(Http3ErrorCode::InternalError)
             })?;
@@ -646,7 +653,7 @@ impl StreamMultiplexer {
 
     async fn weighted_fair_queuing(&self, available_bytes: usize) -> Result<Vec<(u64, usize)>> {
         let mut scheduled = Vec::new();
-        let quantum = self.config.fair_queue_quantum;
+        let _quantum = self.config.fair_queue_quantum;
         let mut remaining_bytes = available_bytes;
 
         let mut queues = self.stream_queues.write().await;
@@ -672,7 +679,7 @@ impl StreamMultiplexer {
                 
                 // Calculate proportional allocation for this urgency level
                 let queue_allocation = (available_bytes * queue.weight) / total_weight;
-                let mut queue_remaining = min(queue_allocation, remaining_bytes);
+                let queue_remaining = queue_allocation.min(remaining_bytes);
                 
                 // Allocate to streams in this urgency level round-robin
                 let streams_in_queue = queue.streams.len();
@@ -725,7 +732,7 @@ impl StreamMultiplexer {
                     if remaining_bytes == 0 {
                         break;
                     }
-                    let allocation = min(remaining_bytes, self.config.fair_queue_quantum);
+                    let allocation = remaining_bytes.min(self.config.fair_queue_quantum);
                     scheduled.push((stream_id, allocation));
                     remaining_bytes -= allocation;
                 }
@@ -757,7 +764,7 @@ impl StreamMultiplexer {
                 
                 for &stream_id in &queue.streams {
                     if bytes_per_stream > 0 && remaining_bytes > 0 {
-                        let actual_allocation = min(bytes_per_stream, remaining_bytes);
+                        let actual_allocation = bytes_per_stream.min(remaining_bytes);
                         scheduled.push((stream_id, actual_allocation));
                         remaining_bytes -= actual_allocation;
                     }
@@ -817,6 +824,10 @@ mod tests {
         let stats = multiplexer.get_stats().await;
         assert_eq!(stats.active_streams, 2);
         assert_eq!(stats.pending_streams, 0);
+        
+        // Clean up remaining streams
+        multiplexer.close_stream(stream2).await.unwrap();
+        multiplexer.close_stream(stream3).await.unwrap();
     }
 
     #[tokio::test]
@@ -895,13 +906,25 @@ mod tests {
         
         let stream_id = multiplexer.create_stream(true, priority).await.unwrap();
         
+        // Verify stream exists initially
+        let initial_stats = multiplexer.get_stats().await;
+        assert_eq!(initial_stats.active_streams, 1);
+        
         // Wait for timeout
         tokio::time::sleep(Duration::from_millis(150)).await;
         
         let cleaned = multiplexer.cleanup_idle_streams().await;
         assert_eq!(cleaned, 1);
         
+        // Verify the specific stream was cleaned up
         let stats = multiplexer.get_stats().await;
         assert_eq!(stats.active_streams, 0);
+        
+        // Verify stream is no longer accessible
+        let stream_exists = {
+            let streams = multiplexer.streams.read().await;
+            streams.contains_key(&stream_id)
+        };
+        assert!(!stream_exists, "Stream {} should have been cleaned up", stream_id);
     }
 }

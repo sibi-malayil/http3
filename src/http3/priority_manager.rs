@@ -6,14 +6,13 @@
 use crate::{
     error::{Error, Result, Http3ErrorCode},
     http3::{
-        priority::{Priority, PriorityScheduler, PriorityUpdateFrame, StreamPriority, PRIORITY_UPDATE_FRAME_TYPE},
-        frame::{Http3Frame, Http3FrameType},
         stream::Stream,
+        priority::{PriorityScheduler, Priority, PriorityUpdateFrame},
+        frame::Http3Frame,
     },
     quic::stream::StreamId,
-    util::varint::VarInt,
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    {protocol_event},
 };
 use bytes::{Bytes, BytesMut};
 use std::{
@@ -197,7 +196,7 @@ impl PriorityManager {
     }
 
     /// Sets default priority for new streams
-    pub async fn set_default_priority(&self, priority: Priority) -> Result<()> {
+    pub fn set_default_priority(&self, priority: Priority) -> Result<()> {
         // This would be used to set a default for newly created streams
         // Implementation would depend on how defaults are stored
         protocol_event!(
@@ -335,7 +334,6 @@ mod tests {
     use crate::{
         http3::{stream::StreamType, priority::PriorityUpdateFrame},
         qpack::{encoder::Encoder, decoder::Decoder, Config},
-        util::varint::VarInt,
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;

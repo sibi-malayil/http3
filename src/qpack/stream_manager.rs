@@ -13,13 +13,12 @@ use crate::{
         field::HeaderField,
         Config,
     },
-    quic::stream::StreamId,
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    {protocol_event},
 };
 use bytes::{Bytes, BytesMut, BufMut};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -169,7 +168,7 @@ impl QpackStreamManager {
         let encoded = encoder.encode_field_section(stream_id, &headers, allow_blocking)?;
         
         // Track any dynamic table references
-        if let Some(references) = self.extract_references(&headers, &encoder).await {
+        if let Some(references) = self.extract_references(&headers, &encoder) {
             let mut tracker = self.reference_tracker.write().await;
             for abs_index in references {
                 tracker.add_reference(stream_id, abs_index);
@@ -362,7 +361,7 @@ impl QpackStreamManager {
     }
 
     /// Extract dynamic table references from headers
-    async fn extract_references(
+    fn extract_references(
         &self,
         headers: &[HeaderField],
         encoder: &Encoder,

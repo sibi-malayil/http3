@@ -6,7 +6,7 @@
 use crate::{
     error::{Error, Result},
     quic::{
-        packet::{ConnectionId, PacketHeader, LongHeader},
+        packet::ConnectionId,
         VERSION_1,
     },
     whathappened::Level,

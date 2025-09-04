@@ -19,7 +19,7 @@ use ring::{
     hkdf::{self, KeyType, Salt},
 };
 use rustls::{
-    quic::{Connection as QuicConnection, Keys},
+    quic::{Connection as QuicConnection},
 };
 use std::{sync::Arc, collections::BTreeMap};
 

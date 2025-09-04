@@ -24,6 +24,7 @@ pub struct ConsoleOutput {
 
 impl ConsoleOutput {
     /// Create a new console output
+    #[must_use]
     pub fn new() -> Self {
         Self {
             // Simple TTY detection using std only
@@ -32,6 +33,7 @@ impl ConsoleOutput {
     }
     
     /// Create console output with explicit color setting
+    #[must_use]
     pub fn with_color(use_color: bool) -> Self {
         Self { use_color }
     }
@@ -111,6 +113,7 @@ impl FileOutput {
     }
     
     /// Get the file path
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -134,6 +137,7 @@ pub struct BufferedOutput<O: Output> {
 
 impl<O: Output> BufferedOutput<O> {
     /// Create a new buffered output
+    #[must_use]
     pub fn new(inner: O, buffer_size: usize) -> Self {
         Self {
             inner,
@@ -180,6 +184,7 @@ pub struct JsonOutput<O: Output> {
 
 impl<O: Output> JsonOutput<O> {
     /// Create a new JSON output
+    #[must_use]
     pub fn new(inner: O) -> Self {
         Self { inner }
     }
@@ -224,6 +229,7 @@ pub struct MultiOutput {
 
 impl MultiOutput {
     /// Create a new multi-output
+    #[must_use]
     pub fn new(outputs: Vec<Arc<dyn Output>>) -> Self {
         Self { outputs }
     }

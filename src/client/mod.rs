@@ -19,7 +19,6 @@ use std::{
 };
 use tokio::sync::Mutex;
 use url::Url;
-use crate::http3::connection::Connection as Http3Connection;
 
 pub mod connection;
 pub mod builder;
@@ -96,9 +95,16 @@ impl Client {
     /// 
     /// Returns an error if the underlying request fails or body sending fails.
     pub async fn post(&mut self, url: &str, body: impl Into<Bytes>) -> Result<connection::Response> {
-        let response = self.request("POST", url).await?;
-        // Note: POST body should be sent through the connection, not the response
-        Ok(response)
+        let body_bytes = body.into();
+        let url_parsed = Url::parse(url)
+            .map_err(|_| Error::ProtocolViolation("Invalid URL".to_string()))?;
+
+        // Get or create HTTP/3 connection to the server
+        let client_conn = self.get_or_create_h3_connection(&url_parsed).await?;
+        
+        // Send POST request with body
+        let conn = client_conn.lock().await;
+        conn.post(url_parsed.path(), body_bytes).await
     }
 
     /// Get or create an HTTP/3 connection to the server
@@ -121,7 +127,7 @@ impl Client {
         
         // Wait for QUIC handshake to complete
         {
-            let mut conn = quic_conn.lock().await;
+            let conn = quic_conn.lock().await;
             while !conn.is_established() {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
             }

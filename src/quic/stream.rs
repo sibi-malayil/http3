@@ -728,7 +728,7 @@ impl Stream {
     
     /// Check if stream has data ready to send
     pub fn has_data_to_send(&self) -> bool {
-        !self.send_buffer.is_empty()
+        !self.send_buffer.is_empty() || (self.fin_sent && self.state != StreamState::Closed)
     }
 
     /// Get the final size of the stream (if FIN received)
@@ -776,6 +776,44 @@ pub struct StreamStats {
     pub pending_recv: usize,
     /// Whether the stream has finished
     pub is_finished: bool,
+}
+
+impl Stream {
+    /// Get stream's send offset
+    pub fn send_offset(&self) -> u64 {
+        self.send_offset
+    }
+    
+    /// Get the size of pending send data
+    pub fn pending_send_size(&self) -> usize {
+        self.send_buffer.len()
+    }
+    
+    /// Check if send is complete
+    pub fn is_send_complete(&self) -> bool {
+        self.fin_sent
+    }
+    
+    /// Get pending send data up to max_size
+    pub fn get_pending_send_data(&mut self, max_size: usize) -> Option<Bytes> {
+        if self.send_buffer.is_empty() {
+            return None;
+        }
+        
+        let size = self.send_buffer.len().min(max_size);
+        if size == 0 {
+            return None;
+        }
+        
+        let data = self.send_buffer.split_to(size);
+        Some(Bytes::copy_from_slice(&data))
+    }
+    
+    /// Advance the send offset
+    pub fn advance_send_offset(&mut self, amount: u64) {
+        self.send_offset += amount;
+        self.data_sent += amount;
+    }
 }
 
 #[cfg(test)]

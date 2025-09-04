@@ -345,7 +345,9 @@ impl PacingController {
         protocol_event!(
             Level::Info,
             "Pacing adjusted for congestion";
-            "new_burst_allowance" => self.burst_allowance
+            "timestamp" => format!("{:?}", now),
+            "new_burst_allowance" => self.burst_allowance,
+            "tokens_available" => self.token_bucket.tokens as u64
         );
     }
 
@@ -372,6 +374,15 @@ impl PacingController {
                 (self.config.burst_accumulation_rate * 
                  self.smoothed_rtt.as_secs_f64()) as u32
             );
+            
+            protocol_event!(
+                Level::Debug,
+                "Starting burst accumulation";
+                "timestamp" => format!("{:?}", now),
+                "current_burst" => self.burst_allowance,
+                "additional_burst" => additional
+            );
+            
             self.burst_allowance = min(
                 self.config.max_burst,
                 self.burst_allowance + additional
@@ -471,6 +482,14 @@ impl PacingController {
     
     /// Update pacing rate with specific timestamp
     pub fn update_pacing_rate_with_time(&mut self, new_rate: u64, now: Instant) {
+        protocol_event!(
+            Level::Debug,
+            "Updating pacing rate";
+            "timestamp" => format!("{:?}", now),
+            "new_rate" => new_rate,
+            "old_rate" => self.pacing_rate
+        );
+        
         // Clamp rate to configured bounds
         let clamped_rate = max(
             self.config.min_pacing_rate,
@@ -624,7 +643,7 @@ mod tests {
         let now = Instant::now();
         
         // Update to higher rate
-        pacer.update_pacing_rate(1_000_000, now);
+        pacer.update_pacing_rate_with_time(1_000_000, now);
         
         // Should be smoothed, not immediate
         assert!(pacer.pacing_rate() > min_rate);
@@ -645,7 +664,7 @@ mod tests {
         pacer.state = PacingState::Active;
         
         // With low rate, large packet might not be sendable immediately
-        pacer.update_pacing_rate(1000, now); // Very low rate
+        pacer.update_pacing_rate_with_time(1000, now); // Very low rate
         pacer.token_bucket.tokens = 500.0; // Limited tokens
         assert!(!pacer.can_send(1200, now));
     }
@@ -657,7 +676,7 @@ mod tests {
         let now = Instant::now();
         
         // Set low rate and few tokens (use a rate above minimum)
-        pacer.update_pacing_rate(100_000, now); // 100KB/sec
+        pacer.update_pacing_rate_with_time(100_000, now); // 100KB/sec
         pacer.token_bucket.tokens = 0.0;
         pacer.state = PacingState::Active;
         
@@ -730,11 +749,11 @@ mod tests {
         let now = Instant::now();
         
         // Test below minimum
-        pacer.update_pacing_rate(500, now);
+        pacer.update_pacing_rate_with_time(500, now);
         assert!(pacer.pacing_rate() >= config.min_pacing_rate);
         
         // Test above maximum
-        pacer.update_pacing_rate(50000, now);
+        pacer.update_pacing_rate_with_time(50000, now);
         // Should be clamped gradually due to smoothing
         assert!(pacer.target_pacing_rate == config.max_pacing_rate);
     }

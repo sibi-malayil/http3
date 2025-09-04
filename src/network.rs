@@ -9,10 +9,11 @@ use crate::{
         packet::{ConnectionId, Packet, PacketHeader},
         transport::TransportParameters,
     },
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, net_event, span},
+    whathappened::{Level},
+    {net_event, span},
 };
 use bytes::Bytes;
+use log::debug;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -34,6 +35,14 @@ pub struct UdpPacket {
     pub source: SocketAddr,
 }
 
+/// TLS configuration type
+enum TlsConfig {
+    /// Client TLS configuration
+    Client(Arc<rustls::ClientConfig>),
+    /// Server TLS configuration  
+    Server(Arc<rustls::ServerConfig>),
+}
+
 /// Network endpoint managing UDP socket and QUIC connections
 pub struct NetworkEndpoint {
     /// UDP socket for sending/receiving packets
@@ -52,6 +61,8 @@ pub struct NetworkEndpoint {
     connection_timeout: Duration,
     /// Channel for notifying about new incoming connections
     new_connection_tx: Option<mpsc::UnboundedSender<(Arc<Mutex<Connection>>, SocketAddr)>>,
+    /// TLS configuration
+    tls_config: Option<TlsConfig>,
 }
 
 impl NetworkEndpoint {
@@ -76,6 +87,7 @@ impl NetworkEndpoint {
             transport_params: TransportParameters::default(),
             connection_timeout: Duration::from_secs(30),
             new_connection_tx: None,
+            tls_config: None,
         };
 
         // Start packet sender task
@@ -424,9 +436,22 @@ impl NetworkEndpoint {
         bind_addr: SocketAddr,
         tls_config: Arc<rustls::ServerConfig>,
     ) -> Result<(Self, mpsc::UnboundedReceiver<(Arc<Mutex<Connection>>, SocketAddr)>)> {
-        // TODO: Integrate TLS configuration into endpoint
-        // For now, just create a standard accepting endpoint
-        Self::new_accepting(bind_addr).await
+        let mut endpoint = Self::new(bind_addr).await?;
+        
+        // Store TLS config in the endpoint
+        endpoint.tls_config = Some(TlsConfig::Server(tls_config));
+        
+        let (tx, rx) = mpsc::unbounded_channel();
+        endpoint.new_connection_tx = Some(tx);
+        
+        net_event!(
+            Level::Info,
+            "TLS server endpoint created";
+            "bind_addr" => bind_addr,
+            "alpn_protocols" => 1
+        );
+        
+        Ok((endpoint, rx))
     }
 }
 
@@ -437,9 +462,18 @@ pub async fn create_client_endpoint() -> Result<NetworkEndpoint> {
 
 /// Helper function to create a client endpoint with custom TLS configuration
 pub async fn create_client_endpoint_with_config(tls_config: Arc<rustls::ClientConfig>) -> Result<NetworkEndpoint> {
-    // TODO: Integrate TLS configuration into endpoint
-    // For now, just create a standard endpoint
-    NetworkEndpoint::new("0.0.0.0:0".parse().unwrap()).await
+    let mut endpoint = NetworkEndpoint::new("0.0.0.0:0".parse().unwrap()).await?;
+    
+    // Store TLS config in the endpoint
+    endpoint.tls_config = Some(TlsConfig::Client(tls_config));
+    
+    net_event!(
+        Level::Info,
+        "TLS client endpoint created";
+        "alpn_protocols" => 1
+    );
+    
+    Ok(endpoint)
 }
 
 /// Helper function to create a server endpoint

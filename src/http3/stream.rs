@@ -4,11 +4,11 @@
 
 use crate::{
     error::{Error, Result},
-    http3::{frame_simple::Frame, priority::{Priority, StreamPriority, PriorityScheduler}},
+    http3::{frame_simple::Frame, priority::{Priority, StreamPriority}},
     qpack::{decoder::Decoder, encoder::Encoder, field::HeaderField},
     quic::stream::StreamId,
-    whathappened::{Level, EventKind},
-    {debug, info, warn, error, protocol_event, span, time_block},
+    whathappened::Level,
+    {protocol_event, span},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
@@ -218,7 +218,7 @@ impl Stream {
     }
 
     /// Send data
-    pub async fn send_data(&mut self, data: Bytes) -> Result<()> {
+    pub fn send_data(&mut self, data: Bytes) -> Result<()> {
         let _span = span!(Level::Debug, "send_data", stream_id = self.id.into_inner(), data_len = data.len());
         
         if !self.headers_sent {
@@ -330,7 +330,7 @@ impl Stream {
                 self.process_headers(encoded).await?
             }
             Frame::Data(data) => {
-                self.process_data_frame(data).await?
+                self.process_data_frame(data)?
             }
             Frame::CancelPush(_) | Frame::Settings(_) | Frame::PushPromise(_, _) |
             Frame::Goaway(_) | Frame::MaxPushId(_) => {
@@ -383,7 +383,7 @@ impl Stream {
     }
 
     /// Process data frame
-    async fn process_data_frame(&mut self, data: Bytes) -> Result<()> {
+    fn process_data_frame(&mut self, data: Bytes) -> Result<()> {
         if !self.headers_received {
             return Err(Error::StreamError {
                 code: crate::error::StreamErrorCode::FrameUnexpected,
@@ -403,7 +403,7 @@ impl Stream {
     }
 
     /// Handle stream finished
-    pub async fn handle_finished(&mut self) -> Result<()> {
+    pub fn handle_finished(&mut self) -> Result<()> {
         self.finished = true;
         self.state = StreamState::Finished;
         
@@ -419,7 +419,7 @@ impl Stream {
     }
 
     /// Handle stream reset
-    pub async fn handle_reset(&mut self, error_code: u64) -> Result<()> {
+    pub fn handle_reset(&mut self, error_code: u64) -> Result<()> {
         self.state = StreamState::Reset;
         
         if let Some(tx) = &self.event_tx {

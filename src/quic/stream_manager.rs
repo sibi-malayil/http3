@@ -4,7 +4,6 @@
 
 use crate::{
     error::{Error, Result, StreamErrorCode},
-    error_context::{ResultContext, common_errors},
     quic::{
         connection::ConnectionRole,
         stream::{Stream, StreamId, StreamState, StreamStats, StreamType},
@@ -1224,7 +1223,7 @@ impl StreamManager {
 
     /// Generate frames for the given stream
     pub fn generate_stream_frames(&mut self, stream_id: StreamId, max_bytes: usize) -> Result<Vec<Frame>> {
-        let stream = self.streams.get(&stream_id)
+        let stream = self.streams.get_mut(&stream_id)
             .ok_or_else(|| Error::StreamError {
                 code: StreamErrorCode::StreamNotFound,
                 reason: "Stream does not exist".to_string(),
@@ -1242,7 +1241,47 @@ impl StreamManager {
             });
         }
 
-        // TODO: Generate STREAM frames from send buffer
+        // Generate STREAM frames from send buffer
+        if Stream::has_data_to_send(stream) {
+            // Check flow control
+            let available_window = Stream::send_max_data(stream).saturating_sub(Stream::bytes_sent(stream));
+            if available_window == 0 {
+                // Stream is blocked on flow control
+                frames.push(Frame::StreamDataBlocked {
+                    stream_id,
+                    maximum_stream_data: Stream::send_max_data(stream),
+                });
+            } else {
+                // Calculate how much data we can send
+                let max_frame_size = available_window.min(65535) as usize; // Reasonable max frame size
+                
+                // Get data from stream's send buffer
+                if let Some(send_data) = stream.get_pending_send_data(max_frame_size) {
+                    let offset = stream.send_offset();
+                    let fin = stream.is_send_complete() && send_data.len() == stream.pending_send_size();
+                    
+                    frames.push(Frame::Stream {
+                        stream_id,
+                        offset,
+                        length: Some(send_data.len() as u64),
+                        fin,
+                        data: send_data.clone(),
+                    });
+                    
+                    // Update stream's send offset
+                    stream.advance_send_offset(send_data.len() as u64);
+                    
+                    protocol_event!(
+                        Level::Debug,
+                        "Generated STREAM frame";
+                        "stream_id" => stream_id.into_inner(),
+                        "offset" => offset,
+                        "length" => send_data.len(),
+                        "fin" => fin
+                    );
+                }
+            }
+        }
 
         Ok(frames)
     }
@@ -1916,7 +1955,7 @@ impl StreamManager {
                 };
                 
                 self.violation_tracker.record_violation(violation.clone());
-                return Err(common_errors::flow_control_error(violation.description));
+                return Err(crate::error_context::common_errors::flow_control_error(violation.description));
             }
             
             // Check final size violations using Rust 2024 let chains
@@ -2007,7 +2046,7 @@ impl StreamManager {
             };
             
             self.violation_tracker.record_violation(violation.clone());
-            return Err(common_errors::stream_limit_error(violation.description));
+            return Err(crate::error_context::common_errors::stream_limit_error(violation.description));
         }
         
         Ok(())
@@ -2358,7 +2397,7 @@ mod tests {
 
     #[test]
     fn test_window_update_config_validation() {
-        let mut params = TransportParameters::default();
+        let params = TransportParameters::default();
         let mut manager = StreamManager::new(ConnectionRole::Client, &params);
         
         // Test different threshold configurations

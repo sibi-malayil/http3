@@ -2,7 +2,6 @@
 
 use crate::{
     error::{Error, Result},
-    network::NetworkEndpoint,
     qpack::{encoder::Encoder as QpackEncoder},
 };
 use rustls::{ClientConfig, RootCertStore, pki_types::CertificateDer};
@@ -129,7 +128,7 @@ impl Client {
         
         // Wait for QUIC handshake to complete
         {
-            let mut conn = quic_conn.lock().await;
+            let conn = quic_conn.lock().await;
             while !conn.is_established() {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
             }

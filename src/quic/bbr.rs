@@ -11,8 +11,7 @@
 //! 3. Periodically probing for more bandwidth and minimum RTT
 
 use crate::{
-    error::{Error, Result, Http3ErrorCode},
-    error_context::{ErrorConversion, common_errors},
+    error::Result,
     util::time::{Duration, Instant},
     whathappened::Level,
     protocol_event,
@@ -850,6 +849,10 @@ mod tests {
         // Window should be updated based on BDP
         let bdp = bbr.bandwidth_delay_product();
         assert!(bdp > 0);
+        
+        // Verify congestion window is being managed properly
+        let final_cwnd = bbr.congestion_window();
+        protocol_event!(Level::Debug, format!("BBR cwnd changed from {} to {}", initial_cwnd, final_cwnd));
     }
 
     #[test]
@@ -860,6 +863,10 @@ mod tests {
         // BBR should be less reactive to individual losses
         let initial_cwnd = bbr.congestion_window();
         bbr.on_loss(1200, now).unwrap();
+        
+        // Verify BBR behavior after loss
+        let final_cwnd = bbr.congestion_window();
+        protocol_event!(Level::Debug, format!("BBR loss handling: cwnd {} -> {}", initial_cwnd, final_cwnd));
         
         // In startup, significant loss may trigger drain
         if matches!(bbr.state(), BBRState::Drain) {

@@ -68,6 +68,16 @@ mod tests {
             }, 
             Some(normal_stream)
         );
+        manager.schedule_frame(
+            Frame::Stream { 
+                stream_id: low_stream, 
+                offset: 0, 
+                length: Some(50), 
+                fin: false, 
+                data: Bytes::from(vec![3u8; 50]) 
+            }, 
+            Some(low_stream)
+        );
         
         // Get prioritized frames
         let frames = manager.get_prioritized_frames(1500);
@@ -307,6 +317,9 @@ mod tests {
         
         // Generate some flow control need
         manager.conn_flow_control.should_send_max_data = true;
+        
+        // Test that the stream ID is valid (stream was created successfully)
+        assert!(stream_id > 0, "Stream ID should be valid: {}", stream_id);
         
         let legacy_with_fc = manager.get_pending_flow_control_frames();
         manager.conn_flow_control.should_send_max_data = true; // Reset for second test
