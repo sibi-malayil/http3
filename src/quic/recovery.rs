@@ -1236,6 +1236,11 @@ impl RecoveryManager {
                 .sum(),
         }
     }
+
+    /// Get current pacing rate from congestion controller
+    pub fn pacing_rate(&self) -> u64 {
+        self.congestion_controller.pacing_rate()
+    }
 }
 
 impl Default for RecoveryManager {

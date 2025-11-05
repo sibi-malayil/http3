@@ -1141,8 +1141,11 @@ impl Connection {
         );
         
         self.recovery.on_packet_sent(&packet, frames);
-        
+
         self.bytes_in_flight += packet_size as u64;
+
+        // Update pacing rate from congestion controller for flow control decisions
+        self.pacing_rate = Some(self.recovery.pacing_rate());
 
         Ok(())
     }
