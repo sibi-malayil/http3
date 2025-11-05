@@ -609,6 +609,74 @@ impl ConnectionManager {
         // Datagrams are fire-and-forget, no response frames
         Ok(Vec::new())
     }
+
+    /// Get current settings
+    pub async fn get_settings(&self) -> Settings {
+        self.settings.read().await.clone()
+    }
+
+    /// Get control stream ID (once established)
+    pub async fn get_control_stream_id(&self) -> Option<u64> {
+        *self.control_stream_id.read().await
+    }
+
+    /// Set control stream ID when control stream is opened
+    pub async fn set_control_stream_id(&self, stream_id: u64) {
+        *self.control_stream_id.write().await = Some(stream_id);
+        protocol_event!(
+            Level::Info,
+            "Control stream established";
+            "stream_id" => stream_id
+        );
+    }
+
+    /// Get QPACK encoder stream ID
+    pub async fn get_qpack_encoder_stream_id(&self) -> Option<u64> {
+        *self.qpack_encoder_stream_id.read().await
+    }
+
+    /// Set QPACK encoder stream ID
+    pub async fn set_qpack_encoder_stream_id(&self, stream_id: u64) {
+        *self.qpack_encoder_stream_id.write().await = Some(stream_id);
+        protocol_event!(
+            Level::Debug,
+            "QPACK encoder stream established";
+            "stream_id" => stream_id
+        );
+    }
+
+    /// Get QPACK decoder stream ID
+    pub async fn get_qpack_decoder_stream_id(&self) -> Option<u64> {
+        *self.qpack_decoder_stream_id.read().await
+    }
+
+    /// Set QPACK decoder stream ID
+    pub async fn set_qpack_decoder_stream_id(&self, stream_id: u64) {
+        *self.qpack_decoder_stream_id.write().await = Some(stream_id);
+        protocol_event!(
+            Level::Debug,
+            "QPACK decoder stream established";
+            "stream_id" => stream_id
+        );
+    }
+
+    /// Allocate next client-initiated stream ID
+    pub async fn allocate_client_stream_id(&self) -> u64 {
+        let mut next_id = self.next_client_stream_id.write().await;
+        let id = *next_id;
+        *next_id += 4; // Client IDs increment by 4
+        id
+    }
+
+    /// Get pending frames from queue for processing
+    pub async fn dequeue_frame(&self) -> Option<(u64, Http3Frame)> {
+        self.frame_queue.lock().await.pop_front()
+    }
+
+    /// Queue a frame for later processing
+    pub async fn queue_frame(&self, stream_id: u64, frame: Http3Frame) {
+        self.frame_queue.lock().await.push_back((stream_id, frame));
+    }
 }
 
 #[cfg(test)]
