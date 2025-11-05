@@ -212,8 +212,11 @@ impl PacingController {
             self.pacing_rate = new_pacing_rate;
         }
 
-        // Update token bucket rate
+        // Update token bucket rate and capacity
         self.token_bucket.set_rate(self.pacing_rate as f64);
+        // Set capacity to allow for max_burst worth of tokens
+        let new_capacity = (self.pacing_rate as f64 * self.config.max_burst as f64) / 1000.0;
+        self.token_bucket.set_capacity(new_capacity);
         self.token_bucket.update(now);
 
         protocol_event!(

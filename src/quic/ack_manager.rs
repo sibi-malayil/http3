@@ -26,14 +26,38 @@ const MAX_ACK_DELAY: Duration = Duration::from_millis(25);
 const ACK_ELICITING_THRESHOLD: u32 = 2;
 
 /// Represents a received packet for ACK tracking
+///
+/// Currently unused - present implementation uses BTreeSet<u64> for simplicity.
+/// This struct provides a richer data model for future enhancements like:
+/// - Per-packet timing information for RTT calculations
+/// - ECN marking tracking per packet
+/// - Selective ACK optimization
 #[derive(Debug, Clone)]
-struct ReceivedPacket {
+pub struct ReceivedPacket {
     /// Packet number
-    packet_number: u64,
+    pub packet_number: u64,
     /// Time when packet was received
-    receive_time: Instant,
+    pub receive_time: Instant,
     /// Whether this packet is ack-eliciting
-    ack_eliciting: bool,
+    pub ack_eliciting: bool,
+}
+
+impl ReceivedPacket {
+    /// Create a new received packet record
+    pub fn new(packet_number: u64, receive_time: Instant, ack_eliciting: bool) -> Self {
+        protocol_event!(
+            Level::Debug,
+            "Tracking received packet";
+            "packet_number" => packet_number,
+            "ack_eliciting" => ack_eliciting
+        );
+
+        Self {
+            packet_number,
+            receive_time,
+            ack_eliciting,
+        }
+    }
 }
 
 /// ACK manager for a single packet number space
@@ -132,15 +156,22 @@ impl AckManager {
             return true;
         }
 
-        // Check if we've exceeded the max ACK delay
+        // Check if we've exceeded the max ACK delay, but respect MIN_ACK_DELAY
         if let Some(first_time) = self.first_ack_eliciting_time {
             let elapsed = now.duration_since(first_time);
+
+            // Don't send ACK too quickly (respect MIN_ACK_DELAY)
+            if elapsed < MIN_ACK_DELAY {
+                return false;
+            }
+
             if elapsed >= MAX_ACK_DELAY {
                 protocol_event!(
                     Level::Debug,
                     "ACK needed - max delay exceeded";
                     "pn_space" => self.pn_space,
                     "elapsed_ms" => elapsed.as_millis(),
+                    "min_delay_ms" => MIN_ACK_DELAY.as_millis(),
                     "max_delay_ms" => MAX_ACK_DELAY.as_millis()
                 );
                 return true;

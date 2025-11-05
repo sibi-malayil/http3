@@ -664,8 +664,13 @@ impl RecoveryManager {
                 // RFC 9002: For Application Data, include new data if available
                 // For now, just use PING - in full implementation would check for new data
                 frames.push(Frame::Ping);
-                
-                // Retransmit important STREAM frames with reassembly
+
+                // Try to find most important single stream frame first (for quick recovery)
+                if let Some(priority_frame) = self.find_stream_frame_to_retransmit(space_data) {
+                    frames.push(priority_frame);
+                }
+
+                // Retransmit additional important STREAM frames with reassembly
                 let stream_frames = self.find_stream_frames_to_retransmit(space_data);
                 frames.extend(stream_frames);
                 
