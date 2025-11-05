@@ -243,14 +243,17 @@ impl Connection {
     /// Send a frame on a stream
     pub async fn send_frame(&self, stream_id: StreamId, frame: Frame) -> Result<()> {
         let _span = span!(Level::Debug, "send_frame", stream_id = stream_id.into_inner());
-        
+
+        // Notify frame channel for monitoring/logging
+        let _ = self.frame_tx.send((stream_id, frame.clone()));
+
         let mut data = BytesMut::new();
         frame.encode(&mut data)?;
-        
+
         let frame_size = data.len();
         let mut _quic_conn = self._quic_conn.lock().await;
         _quic_conn.stream_send(stream_id, data.freeze(), false).await?;
-        
+
         protocol_event!(
             Level::Debug,
             "HTTP/3 frame sent";
@@ -258,7 +261,7 @@ impl Connection {
             "frame_type" => frame,
             "frame_size" => frame_size
         );
-        
+
         Ok(())
     }
 
@@ -532,6 +535,11 @@ impl Connection {
     async fn get_last_stream_id(&self) -> Option<StreamId> {
         let streams = self.streams.read().await;
         streams.keys().max().copied()
+    }
+
+    /// Poll for a sent frame notification (for monitoring)
+    pub fn try_recv_frame_notification(&mut self) -> Option<(StreamId, Frame)> {
+        self.frame_rx.try_recv().ok()
     }
 
     /// Get connection state

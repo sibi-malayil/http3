@@ -260,10 +260,25 @@ impl ZeroRttManager {
         const MAX_PACKET_SIZE: usize = 1200; // Conservative MTU
 
         // Collect frames up to packet size
+        let now = Instant::now();
         while let Some(data) = buffer.front() {
             let frame_size = 1 + 8 + 8 + data.data.len(); // Approx STREAM frame size
             if total_size + frame_size > MAX_PACKET_SIZE {
                 break;
+            }
+
+            // Check if data has been queued too long (timeout)
+            let queue_duration = now.duration_since(data.queued_at);
+            if queue_duration > Duration::from_secs(5) {
+                protocol_event!(
+                    Level::Warn,
+                    "0-RTT data timed out";
+                    "stream_id" => data.stream_id,
+                    "queue_duration_ms" => queue_duration.as_millis(),
+                    "idempotent" => data.idempotent
+                );
+                buffer.pop_front(); // Discard timed out data
+                continue;
             }
 
             let data = buffer.pop_front().unwrap();
