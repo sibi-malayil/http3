@@ -724,32 +724,32 @@ impl BBRController {
     }
 
     /// Handle ECN congestion event
-    pub fn on_ecn_congestion(&mut self, _event: &crate::quic::ecn::EcnCongestionEvent, _now: Instant) -> Result<()> {
+    pub fn on_ecn_congestion(&mut self, event: &crate::quic::ecn::EcnCongestionEvent, now: Instant) -> Result<()> {
         // ECN congestion handling for BBR
         // BBR responds to ECN by treating it as an early congestion signal
         // This is more conservative than waiting for packet loss
-        
+
         // Force transition to Drain if in Startup with high ECN marking
-        if matches!(self.state, BBRState::Startup) && _event.marking_rate > 0.1 {
+        if matches!(self.state, BBRState::Startup) && event.marking_rate > 0.1 {
             self.state = BBRState::Drain;
             self.pacing_gain = self.config.drain_gain;
-            self.state_start_time = _now;
-            
+            self.state_start_time = now;
+
             protocol_event!(
                 Level::Info,
                 "BBR: ECN congestion detected in Startup, transitioning to Drain";
-                "marking_rate" => _event.marking_rate,
-                "ce_count" => _event.ce_count
+                "marking_rate" => event.marking_rate,
+                "ce_count" => event.ce_count
             );
         }
-        
+
         // Reduce bandwidth estimate proportionally to ECN marking rate
-        if _event.marking_rate > 0.05 {
-            let reduction_factor = 1.0 - (_event.marking_rate * 0.5).min(0.3);
+        if event.marking_rate > 0.05 {
+            let reduction_factor = 1.0 - (event.marking_rate * 0.5).min(0.3);
             let current_bw = self.bandwidth_filter.max_bandwidth();
             if current_bw > 0 {
                 let reduced_bw = (current_bw as f64 * reduction_factor) as u64;
-                self.bandwidth_filter.add_sample(reduced_bw, _now);
+                self.bandwidth_filter.add_sample(reduced_bw, now);
                 
                 protocol_event!(
                     Level::Debug,

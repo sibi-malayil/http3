@@ -1232,7 +1232,7 @@ impl StreamManager {
         // Create STREAM frames respecting max_bytes limit
         // In a complete implementation, this would handle segmentation, retransmission, etc.
         let mut frames = Vec::new();
-        let mut _bytes_used = 0usize; // TODO: Track across multiple frames for proper max_bytes enforcement
+        let mut bytes_used = 0usize; // Track bytes used for proper max_bytes enforcement
 
         // Check if we should send MAX_STREAM_DATA
         if stream.should_send_max_stream_data() {
@@ -1256,7 +1256,7 @@ impl StreamManager {
                 // Calculate how much data we can send, respecting max_bytes limit
                 let max_frame_size = available_window
                     .min(65535) // Reasonable max frame size
-                    .min((max_bytes.saturating_sub(_bytes_used)) as u64) as usize;
+                    .min((max_bytes.saturating_sub(bytes_used)) as u64) as usize;
 
                 if max_frame_size == 0 {
                     // No space left in packet
@@ -1277,7 +1277,7 @@ impl StreamManager {
                     });
 
                     // Track bytes used (for future multi-frame support)
-                    _bytes_used += send_data.len();
+                    bytes_used += send_data.len();
 
                     // Update stream's send offset
                     stream.advance_send_offset(send_data.len() as u64);

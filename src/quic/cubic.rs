@@ -550,53 +550,53 @@ impl CubicController {
     }
 
     /// Handle ECN congestion event
-    pub fn on_ecn_congestion(&mut self, _event: &crate::quic::ecn::EcnCongestionEvent, _now: Instant) -> Result<()> {
+    pub fn on_ecn_congestion(&mut self, event: &crate::quic::ecn::EcnCongestionEvent, now: Instant) -> Result<()> {
         // ECN congestion handling for CUBIC
         // CUBIC responds to ECN by reducing the congestion window
         // but more conservatively than packet loss
-        
+
         if matches!(self.state, CubicState::SlowStart) {
             // Exit slow start due to ECN marking
             self.ssthresh = self.cwnd;
             self.state = CubicState::CongestionAvoidance;
             self.cwnd_last_max = self.cwnd;
-            self.epoch_start = Some(_now);
-            
+            self.epoch_start = Some(now);
+
             protocol_event!(
                 Level::Info,
                 "CUBIC: ECN congestion detected in SlowStart, transitioning to CongestionAvoidance";
-                "marking_rate" => _event.marking_rate,
+                "marking_rate" => event.marking_rate,
                 "cwnd" => self.cwnd,
                 "ssthresh" => self.ssthresh
             );
         }
-        
+
         // Reduce congestion window based on ECN marking rate
-        let reduction_factor = match _event.marking_rate {
+        let reduction_factor = match event.marking_rate {
             rate if rate > 0.2 => 0.5,  // High marking rate
             rate if rate > 0.1 => 0.7,  // Medium marking rate
             _ => 0.8,                   // Low marking rate
         };
-        
+
         let new_cwnd = ((self.cwnd as f64 * reduction_factor) as u32).max(self.config.min_cwnd);
-        
+
         // Apply fast convergence if the new window is smaller than last max
         if new_cwnd < self.cwnd_last_max {
             self.cwnd_last_max = new_cwnd;
             self.fast_convergence_active = true;
         }
-        
+
         self.cwnd = new_cwnd;
         self.ssthresh = self.cwnd;
-        self.epoch_start = Some(_now);
-        
+        self.epoch_start = Some(now);
+
         protocol_event!(
             Level::Debug,
             "CUBIC: Applied ECN congestion response";
             "old_cwnd" => self.cwnd,
             "new_cwnd" => new_cwnd,
             "reduction_factor" => reduction_factor,
-            "marking_rate" => _event.marking_rate
+            "marking_rate" => event.marking_rate
         );
         
         Ok(())
