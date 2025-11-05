@@ -616,6 +616,7 @@ impl ConnectionManager {
 mod tests {
     use super::*;
     use crate::http3::frame::{DataFrame, HeadersFrame};
+    use crate::qpack::field::{HeaderName, HeaderValue, HeaderField};
 
     #[tokio::test]
     async fn test_connection_manager_creation() {

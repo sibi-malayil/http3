@@ -364,6 +364,11 @@ mod tests {
     use super::*;
     use crate::quic::stream::StreamId;
 
+    // Test stream ID for datagram tests
+    fn stream_id() -> StreamId {
+        StreamId::from(0u64)
+    }
+
     #[test]
     fn test_datagram_manager_creation() {
         let manager = DatagramManager::default();
@@ -376,10 +381,10 @@ mod tests {
         let mut manager = DatagramManager::default();
         let data = Bytes::from_static(b"Hello, World!");
 
-        let result = manager.send_datagram(stream_id, data);
+        let result = manager.send_datagram(stream_id(), data);
         assert_eq!(result, DatagramResult::Queued);
-        assert_eq!(manager.pending_datagram_count(stream_id), 1);
-        assert!(manager.has_pending_datagrams(stream_id));
+        assert_eq!(manager.pending_datagram_count(stream_id()), 1);
+        assert!(manager.has_pending_datagrams(stream_id()));
     }
 
     #[test]
@@ -391,9 +396,9 @@ mod tests {
         let mut manager = DatagramManager::new(config);
         let large_data = Bytes::from(vec![0u8; 20]);
 
-        let result = manager.send_datagram(stream_id, large_data);
+        let result = manager.send_datagram(stream_id(), large_data);
         assert_eq!(result, DatagramResult::TooLarge);
-        assert_eq!(manager.pending_datagram_count(stream_id), 0);
+        assert_eq!(manager.pending_datagram_count(stream_id()), 0);
         
         let stats = manager.stats();
         assert_eq!(stats.dropped_too_large, 1);
@@ -409,11 +414,11 @@ mod tests {
         let data = Bytes::from_static(b"test");
 
         // Fill queue
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
         
         // Should be full now
-        assert_eq!(manager.send_datagram(stream_id, data), DatagramResult::QueueFull);
+        assert_eq!(manager.send_datagram(stream_id(), data), DatagramResult::QueueFull);
         
         let stats = manager.stats();
         assert_eq!(stats.dropped_queue_full, 1);
@@ -425,10 +430,10 @@ mod tests {
         let data = Bytes::from_static(b"Hello, World!");
 
         // Queue a datagram
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
 
         // Get the frame
-        let frame = manager.next_datagram_frame(stream_id).unwrap();
+        let frame = manager.next_datagram_frame(stream_id()).unwrap();
         match frame {
             Http3Frame::Datagram(datagram_frame) => {
                 assert_eq!(datagram_frame.data, data);
@@ -437,10 +442,10 @@ mod tests {
         }
 
         // Queue should be empty now
-        assert_eq!(manager.pending_datagram_count(stream_id), 0);
+        assert_eq!(manager.pending_datagram_count(stream_id()), 0);
         
         // No more frames
-        assert!(manager.next_datagram_frame(stream_id).is_none());
+        assert!(manager.next_datagram_frame(stream_id()).is_none());
     }
 
     #[test]
@@ -453,8 +458,8 @@ mod tests {
         let data = Bytes::from_static(b"test");
 
         assert!(!manager.is_enabled());
-        assert_eq!(manager.send_datagram(stream_id, data), DatagramResult::NotSupported);
-        assert!(manager.next_datagram_frame(stream_id).is_none());
+        assert_eq!(manager.send_datagram(stream_id(), data), DatagramResult::NotSupported);
+        assert!(manager.next_datagram_frame(stream_id()).is_none());
     }
 
     #[test]
@@ -464,7 +469,7 @@ mod tests {
         let frame = DatagramFrame::new(data.clone());
 
         // Process received datagram
-        manager.on_datagram_received(stream_id, frame).unwrap();
+        manager.on_datagram_received(stream_id(), frame).unwrap();
 
         // Check statistics
         let stats = manager.stats();
@@ -473,7 +478,7 @@ mod tests {
 
         // Get received datagram
         let received = manager.next_received_datagram().unwrap();
-        assert_eq!(received.stream_id, stream_id);
+        assert_eq!(received.stream_id(), stream_id());
         assert_eq!(received.data, data);
     }
 
@@ -483,14 +488,14 @@ mod tests {
         let data = Bytes::from_static(b"test");
 
         // Queue some datagrams
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
-        assert_eq!(manager.pending_datagram_count(stream_id), 2);
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
+        assert_eq!(manager.pending_datagram_count(stream_id()), 2);
 
         // Clear them
-        manager.clear_pending_datagrams(stream_id);
-        assert_eq!(manager.pending_datagram_count(stream_id), 0);
-        assert!(!manager.has_pending_datagrams(stream_id));
+        manager.clear_pending_datagrams(stream_id());
+        assert_eq!(manager.pending_datagram_count(stream_id()), 0);
+        assert!(!manager.has_pending_datagrams(stream_id()));
     }
 
     #[test]
@@ -499,12 +504,12 @@ mod tests {
         let data = Bytes::from_static(b"test data");
 
         // Send some datagrams
-        assert_eq!(manager.send_datagram(stream_id, data.clone()), DatagramResult::Queued);
-        let _frame = manager.next_datagram_frame(stream_id).unwrap();
+        assert_eq!(manager.send_datagram(stream_id(), data.clone()), DatagramResult::Queued);
+        let _frame = manager.next_datagram_frame(stream_id()).unwrap();
 
         // Receive some datagrams
         let frame = DatagramFrame::new(data.clone());
-        manager.on_datagram_received(stream_id, frame).unwrap();
+        manager.on_datagram_received(stream_id(), frame).unwrap();
 
         let stats = manager.stats();
         assert_eq!(stats.datagrams_sent, 1);

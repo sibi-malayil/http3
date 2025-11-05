@@ -83,6 +83,16 @@ macro_rules! log_event {
 /// Network event logging
 #[macro_export]
 macro_rules! net_event {
+    // Format string with arguments
+    ($level:expr, $fmt:expr, $($arg:expr),* $(,)?) => {
+        $crate::log_impl!(
+            $level,
+            $crate::whathappened::EventKind::Network,
+            $fmt,
+            $($arg),*
+        )
+    };
+    // Simple message without arguments
     ($level:expr, $msg:expr) => {
         $crate::log_impl!(
             $level,
@@ -90,6 +100,7 @@ macro_rules! net_event {
             $msg
         )
     };
+    // With context
     ($level:expr, $msg:expr ; $($key:expr => $value:expr),* $(,)?) => {
         $crate::log_impl!(
             $level,
@@ -102,6 +113,16 @@ macro_rules! net_event {
 /// Crypto event logging
 #[macro_export]
 macro_rules! crypto_event {
+    // Format string with arguments
+    ($level:expr, $fmt:expr, $($arg:expr),* $(,)?) => {
+        $crate::log_impl!(
+            $level,
+            $crate::whathappened::EventKind::Crypto,
+            $fmt,
+            $($arg),*
+        )
+    };
+    // Simple message without arguments
     ($level:expr, $msg:expr) => {
         $crate::log_impl!(
             $level,
@@ -109,6 +130,7 @@ macro_rules! crypto_event {
             $msg
         )
     };
+    // With context
     ($level:expr, $msg:expr ; $($key:expr => $value:expr),* $(,)?) => {
         $crate::log_impl!(
             $level,
@@ -121,6 +143,16 @@ macro_rules! crypto_event {
 /// Protocol event logging
 #[macro_export]
 macro_rules! protocol_event {
+    // Format string with arguments
+    ($level:expr, $fmt:expr, $($arg:expr),* $(,)?) => {
+        $crate::log_impl!(
+            $level,
+            $crate::whathappened::EventKind::Protocol,
+            $fmt,
+            $($arg),*
+        )
+    };
+    // Simple message without arguments
     ($level:expr, $msg:expr) => {
         $crate::log_impl!(
             $level,
@@ -128,6 +160,7 @@ macro_rules! protocol_event {
             $msg
         )
     };
+    // With context
     ($level:expr, $msg:expr ; $($key:expr => $value:expr),* $(,)?) => {
         $crate::log_impl!(
             $level,
@@ -140,6 +173,16 @@ macro_rules! protocol_event {
 /// Performance event logging
 #[macro_export]
 macro_rules! perf_event {
+    // Format string with arguments
+    ($level:expr, $fmt:expr, $($arg:expr),* $(,)?) => {
+        $crate::log_impl!(
+            $level,
+            $crate::whathappened::EventKind::Performance,
+            $fmt,
+            $($arg),*
+        )
+    };
+    // Simple message without arguments
     ($level:expr, $msg:expr) => {
         $crate::log_impl!(
             $level,
@@ -147,6 +190,7 @@ macro_rules! perf_event {
             $msg
         )
     };
+    // With context
     ($level:expr, $msg:expr ; $($key:expr => $value:expr),* $(,)?) => {
         $crate::log_impl!(
             $level,

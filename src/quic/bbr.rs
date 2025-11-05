@@ -852,7 +852,7 @@ mod tests {
         
         // Verify congestion window is being managed properly
         let final_cwnd = bbr.congestion_window();
-        protocol_event!(Level::Debug, format!("BBR cwnd changed from {} to {}", initial_cwnd, final_cwnd));
+        protocol_event!(Level::Debug, "BBR cwnd changed from {} to {}", initial_cwnd, final_cwnd);
     }
 
     #[test]
@@ -866,7 +866,7 @@ mod tests {
         
         // Verify BBR behavior after loss
         let final_cwnd = bbr.congestion_window();
-        protocol_event!(Level::Debug, format!("BBR loss handling: cwnd {} -> {}", initial_cwnd, final_cwnd));
+        protocol_event!(Level::Debug, "BBR loss handling: cwnd {} -> {}", initial_cwnd, final_cwnd);
         
         // In startup, significant loss may trigger drain
         if matches!(bbr.state(), BBRState::Drain) {

@@ -1202,10 +1202,10 @@ impl CryptoManager {
     }
     
     /// Legacy install key change method for backward compatibility
-    fn install_legacy_key_change(&mut self, key_change: rustls::quic::KeyChange) -> Result<()> {
+    fn install_legacy_key_change(&mut self, _key_change: rustls::quic::KeyChange) -> Result<()> {
         crypto_event!(
             Level::Debug,
-            "Installing legacy key change";
+            "Installing legacy key change (not fully implemented)";
             "key_change_type" => "KeyChange"
         );
         
@@ -1296,7 +1296,15 @@ impl CryptoManager {
     /// Returns an error if no application keys are available.
     pub fn export_early_keying_material(&self, label: &[u8], context: &[u8], length: usize) -> Result<Vec<u8>> {
         // Check if we have application keys from rustls
-        if let Some(keys) = &self.application_keys_rustls {
+        if let Some(_keys) = &self.application_keys_rustls {
+            crypto_event!(
+                Level::Debug,
+                "Exporting early keying material";
+                "label_len" => label.len(),
+                "context_len" => context.len(),
+                "output_length" => length
+            );
+
             // Build the HKDF info with provided label and context
             let mut info = Vec::new();
             info.extend_from_slice(&(length as u16).to_be_bytes());
@@ -1304,11 +1312,11 @@ impl CryptoManager {
             info.extend_from_slice(label);
             info.push(context.len() as u8);
             info.extend_from_slice(context);
-            
+
             // For now, use a placeholder since rustls doesn't expose early secrets
             // In a real implementation, we'd use HKDF-Expand-Label with the early secret
             let mut output = vec![0u8; length];
-            
+
             crypto_event!(
                 Level::Debug,
                 "Attempting to export early keying material";
@@ -2145,14 +2153,12 @@ impl CryptoManager {
     
     /// Get keys for decrypting a packet (use receive keys)
     fn get_keys_for_decryption(&self, packet_type: PacketType) -> Result<KeysWrapper<'_>> {
-        // eprintln!("Getting decryption keys for {:?}, role: {:?}", packet_type, self.role);
+        // Log decryption attempt for debugging
         if packet_type == PacketType::Initial && self.role == ConnectionRole::Client {
-            if let Some(recv_keys) = &self.initial_recv_keys {
+            if let Some(_recv_keys) = &self.initial_recv_keys {
                 crypto_event!(
                     Level::Debug,
-                    "Client attempting to decrypt Initial packet";
-                    "has_recv_keys" => true,
-                    "recv_keys_type" => "PacketKeys"
+                    "Client decrypting Initial packet with receive keys"
                 );
             }
         }

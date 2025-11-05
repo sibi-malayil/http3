@@ -1229,9 +1229,10 @@ impl StreamManager {
                 reason: "Stream does not exist".to_string(),
             })?;
 
-        // For now, create a simple STREAM frame
+        // Create STREAM frames respecting max_bytes limit
         // In a complete implementation, this would handle segmentation, retransmission, etc.
         let mut frames = Vec::new();
+        let mut _bytes_used = 0usize; // TODO: Track across multiple frames for proper max_bytes enforcement
 
         // Check if we should send MAX_STREAM_DATA
         if stream.should_send_max_stream_data() {
@@ -1252,9 +1253,16 @@ impl StreamManager {
                     maximum_stream_data: Stream::send_max_data(stream),
                 });
             } else {
-                // Calculate how much data we can send
-                let max_frame_size = available_window.min(65535) as usize; // Reasonable max frame size
-                
+                // Calculate how much data we can send, respecting max_bytes limit
+                let max_frame_size = available_window
+                    .min(65535) // Reasonable max frame size
+                    .min((max_bytes.saturating_sub(_bytes_used)) as u64) as usize;
+
+                if max_frame_size == 0 {
+                    // No space left in packet
+                    return Ok(frames);
+                }
+
                 // Get data from stream's send buffer
                 if let Some(send_data) = stream.get_pending_send_data(max_frame_size) {
                     let offset = stream.send_offset();
@@ -1267,7 +1275,10 @@ impl StreamManager {
                         fin,
                         data: send_data.clone(),
                     });
-                    
+
+                    // Track bytes used (for future multi-frame support)
+                    _bytes_used += send_data.len();
+
                     // Update stream's send offset
                     stream.advance_send_offset(send_data.len() as u64);
                     
@@ -2101,6 +2112,7 @@ impl StreamManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::VarInt;
 
     #[test]
     fn test_stream_creation() {

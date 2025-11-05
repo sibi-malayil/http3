@@ -216,6 +216,12 @@ impl QpackStreamManager {
         if let Some(ref headers) = result {
             // Send acknowledgment if needed
             if let Some(ack) = decoder.get_pending_acknowledgment(stream_id) {
+                protocol_event!(
+                    Level::Debug,
+                    "Sending section acknowledgment";
+                    "stream_id" => stream_id,
+                    "ack_value" => ack
+                );
                 let instruction = DecoderInstruction::SectionAcknowledgment { stream_id };
                 let encoded = self.encode_decoder_instruction(instruction)?;
                 self.decoder_instruction_tx.send(encoded)
@@ -363,11 +369,12 @@ impl QpackStreamManager {
     /// Extract dynamic table references from headers
     fn extract_references(
         &self,
-        headers: &[HeaderField],
-        encoder: &Encoder,
+        _headers: &[HeaderField],
+        _encoder: &Encoder,
     ) -> Option<Vec<u64>> {
-        // This would analyze which dynamic table entries are referenced
-        // For now, returning None as this requires deeper encoder integration
+        // TODO: Analyze which dynamic table entries are referenced in headers
+        // This requires deeper encoder integration to track which indices were used
+        // For now, returning None as a placeholder
         None
     }
 

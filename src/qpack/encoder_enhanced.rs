@@ -186,8 +186,11 @@ impl EnhancedEncoder {
         let base = stats.encoder_insert_count;
 
         // Search in dynamic table maintained by manager
-        // For now, fallback to literal encoding
-        // In production, this would search the manager's table
+        // TODO: Implement dynamic table search for stream_id: {stream_id}
+        // TODO: Track referenced_indices for this encoding
+        // For now, fallback to literal encoding since we don't have full dynamic table support
+        // The base insert count ({base}) would be used for relative indexing
+        let _ = (stream_id, referenced_indices, base); // Acknowledge these for future use
 
         // Try name in static table
         if let Some(name_index) = StaticTable::find_name(&field.name) {

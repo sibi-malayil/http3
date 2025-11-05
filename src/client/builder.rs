@@ -3,6 +3,7 @@
 use crate::{
     error::{Error, Result},
     qpack::{encoder::Encoder as QpackEncoder},
+    debug,
 };
 use rustls::{ClientConfig, RootCertStore, pki_types::CertificateDer};
 use std::{
@@ -119,7 +120,10 @@ impl Client {
         
         let port = url.port().unwrap_or(443);
         let server_key = format!("{host}:{port}");
-        
+
+        // Log connection attempt
+        debug!("Connecting to server: {}", server_key);
+
         // Create new QUIC connection
         let server_addr: std::net::SocketAddr = format!("{host}:{port}").parse()
             .map_err(|_| Error::ProtocolViolation("Invalid server address".to_string()))?;
