@@ -207,8 +207,19 @@ impl DatagramManager {
 
         if let Some(queue) = self.outgoing_queue.get_mut(&stream_id) {
             if let Some(pending) = queue.pop_front() {
+                // Validate that datagram was queued for the correct stream (defensive check)
+                if pending.stream_id != stream_id {
+                    protocol_event!(
+                        Level::Error,
+                        "Datagram stream ID mismatch";
+                        "queued_for" => pending.stream_id.into_inner(),
+                        "requested_from" => stream_id.into_inner()
+                    );
+                    // This should never happen, but handle gracefully
+                }
+
                 let frame = DatagramFrame::new(pending.data.clone());
-                
+
                 // Update statistics
                 if self.config.collect_stats {
                     self.stats.datagrams_sent += 1;
