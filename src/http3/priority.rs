@@ -366,7 +366,7 @@ impl PriorityScheduler {
             }
 
             // Use round-robin within the urgency level
-            let start_pos = round_robin.get(&(urgency as usize)).copied().unwrap_or(0);
+            let start_pos = round_robin.get(&{ urgency }).copied().unwrap_or(0);
             let mut current_pos = start_pos;
             
             loop {
@@ -385,7 +385,7 @@ impl PriorityScheduler {
                     
                     if is_active {
                         // Update round-robin state
-                        round_robin.insert(urgency as usize, (current_pos + 1) % queue.len());
+                        round_robin.insert(urgency, (current_pos + 1) % queue.len());
                         
                         protocol_event!(
                             Level::Trace,

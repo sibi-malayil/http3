@@ -213,20 +213,7 @@ impl FlowControlViolationTracker {
         
         self.recent_violations.push_back(violation);
     }
-    
-    /// Get the most recent violation of a specific type
-    fn get_recent_violation(&self, violation_type: FlowControlViolationType) -> Option<&FlowControlViolation> {
-        self.recent_violations
-            .iter()
-            .rev()
-            .find(|v| v.violation_type == violation_type)
-    }
-    
-    /// Check if a specific type of violation occurred recently
-    fn has_recent_violation(&self, violation_type: FlowControlViolationType) -> bool {
-        self.get_recent_violation(violation_type).is_some()
-    }
-    
+
     /// Get violation statistics
     fn get_violation_stats(&self) -> (u64, usize) {
         (self.violations_detected, self.recent_violations.len())
@@ -289,14 +276,8 @@ struct PrioritizedFrameScheduler {
 struct ScheduledFrame {
     /// The QUIC frame to send
     frame: Frame,
-    /// Priority level for this frame
-    priority: FramePriority,
-    /// Stream ID associated with this frame (if applicable)
-    stream_id: Option<StreamId>,
     /// Size estimate for bandwidth calculations
     estimated_size: usize,
-    /// Timestamp when frame was scheduled
-    scheduled_at: std::time::Instant,
 }
 
 /// Statistics about frame scheduling
@@ -304,12 +285,10 @@ struct ScheduledFrame {
 pub struct FrameSchedulingStats {
     /// Total frames scheduled by priority
     pub frames_scheduled_by_priority: HashMap<FramePriority, u64>,
-    /// Total bytes scheduled by priority  
+    /// Total bytes scheduled by priority
     pub bytes_scheduled_by_priority: HashMap<FramePriority, u64>,
     /// Frames currently queued by priority
     pub frames_queued_by_priority: HashMap<FramePriority, usize>,
-    /// Average scheduling latency by priority
-    avg_scheduling_latency: HashMap<FramePriority, std::time::Duration>,
 }
 
 impl PrioritizedFrameScheduler {
@@ -339,18 +318,24 @@ impl PrioritizedFrameScheduler {
         let estimated_size = Self::estimate_frame_size(&frame);
         let scheduled_frame = ScheduledFrame {
             frame,
-            priority,
-            stream_id,
             estimated_size,
-            scheduled_at: std::time::Instant::now(),
         };
-        
+
+        // Log frame scheduling for debugging
+        protocol_event!(
+            Level::Trace,
+            "Frame scheduled";
+            "priority" => priority,
+            "stream_id" => stream_id.map(|id| id.into_inner()),
+            "estimated_size" => estimated_size
+        );
+
         // Add to priority queue
         self.priority_queues
             .entry(priority)
-            .or_insert_with(VecDeque::new)
+            .or_default()
             .push_back(scheduled_frame);
-            
+
         // Update statistics
         *self.stats.frames_scheduled_by_priority.entry(priority).or_insert(0) += 1;
         *self.stats.bytes_scheduled_by_priority.entry(priority).or_insert(0) += estimated_size as u64;
@@ -429,13 +414,7 @@ impl PrioritizedFrameScheduler {
     fn get_stats(&self) -> &FrameSchedulingStats {
         &self.stats
     }
-    
-    /// Clear all pending frames (used for connection reset)
-    fn clear_all_frames(&mut self) {
-        self.priority_queues.clear();
-        self.stats.frames_queued_by_priority.clear();
-    }
-    
+
     /// Classify a frame's priority based on its type and context
     fn classify_frame_priority(frame: &Frame, stream_priority: Option<StreamPriority>) -> FramePriority {
         match frame {
@@ -600,12 +579,6 @@ impl Default for ConnectionFlowControl {
 struct ClosedStreamInfo {
     /// When the stream was closed
     closed_at: std::time::Instant,
-    /// Final stream state
-    final_state: StreamState,
-    /// Total bytes sent
-    bytes_sent: u64,
-    /// Total bytes received
-    bytes_recv: u64,
 }
 
 /// Stream-related events
@@ -613,22 +586,30 @@ struct ClosedStreamInfo {
 pub enum StreamEvent {
     /// A new stream was created
     StreamCreated {
+        /// ID of the newly created stream
         stream_id: StreamId,
+        /// Type of the stream (bidirectional or unidirectional)
         stream_type: StreamType,
+        /// Whether the stream was created locally
         is_local: bool,
     },
     /// A stream was closed
     StreamClosed {
+        /// ID of the closed stream
         stream_id: StreamId,
+        /// Reason for stream closure
         reason: StreamCloseReason,
     },
     /// Data is available to read on a stream
     DataAvailable {
+        /// ID of the stream with available data
         stream_id: StreamId,
     },
     /// Stream is blocked on flow control
     StreamBlocked {
+        /// ID of the blocked stream
         stream_id: StreamId,
+        /// Whether the stream is blocked on connection-level flow control
         is_connection_blocked: bool,
     },
 }
@@ -651,12 +632,8 @@ pub enum StreamCloseReason {
 struct BlockedState {
     /// Amount of data blocked
     blocked_data_size: u64,
-    /// Time when blocking occurred
-    blocked_at: std::time::Instant,
     /// Whether it's blocked on connection-level flow control
     is_connection_blocked: bool,
-    /// The limit that caused blocking
-    limit: u64,
 }
 
 /// Stream manager statistics
@@ -979,9 +956,7 @@ impl StreamManager {
             // Track blocked state
             self.blocked_streams.insert(stream_id, BlockedState {
                 blocked_data_size: data_len,
-                blocked_at: std::time::Instant::now(),
                 is_connection_blocked: true,
-                limit: self.conn_flow_control.max_data_send,
             });
             
             self.stats.conn_flow_control_blocked += 1;
@@ -1011,7 +986,7 @@ impl StreamManager {
                 let priority = self.priorities.get(&stream_id).copied().unwrap_or_default();
                 self.send_ready
                     .entry(priority)
-                    .or_insert_with(VecDeque::new)
+                    .or_default()
                     .push_back(stream_id);
 
                 protocol_event!(
@@ -1047,9 +1022,7 @@ impl StreamManager {
                 // Track blocked state
                 self.blocked_streams.insert(stream_id, BlockedState {
                     blocked_data_size: data_len,
-                    blocked_at: std::time::Instant::now(),
                     is_connection_blocked: false,
-                    limit: stream_limit,
                 });
                 
                 self.stats.stream_flow_control_blocked += 1;
@@ -1413,7 +1386,7 @@ impl StreamManager {
             {
                 self.send_ready
                     .entry(*priority)
-                    .or_insert_with(VecDeque::new)
+                    .or_default()
                     .push_back(stream_id);
                     
                 protocol_event!(
@@ -1465,7 +1438,7 @@ impl StreamManager {
             if let Some(priority) = self.priorities.get(&stream_id) {
                 self.send_ready
                     .entry(*priority)
-                    .or_insert_with(VecDeque::new)
+                    .or_default()
                     .push_back(stream_id);
                 
                 protocol_event!(
@@ -1683,7 +1656,7 @@ impl StreamManager {
                     {
                         self.send_ready
                             .entry(priority)
-                            .or_insert_with(VecDeque::new)
+                            .or_default()
                             .push_back(stream_id);
                     }
                 }
@@ -1762,9 +1735,6 @@ impl StreamManager {
             // Store closed stream info
             self.closed_streams.insert(stream_id, ClosedStreamInfo {
                 closed_at: std::time::Instant::now(),
-                final_state: stream.state(),
-                bytes_sent: stream.bytes_sent(),
-                bytes_recv: stream.bytes_received(),
             });
 
             // Clean up priorities
@@ -1823,14 +1793,14 @@ impl StreamManager {
             // Calculate new window size with adaptive sizing
             let increase_factor = if self.window_update_config.adaptive_sizing {
                 // Use adaptive factor based on consumption rate
-                let adaptive_factor = if window_consumed > 0.8 {
+                
+                if window_consumed > 0.8 {
                     self.window_update_config.max_window_factor
                 } else if window_consumed > 0.6 {
                     (self.window_update_config.min_window_factor + self.window_update_config.max_window_factor) / 2.0
                 } else {
                     self.window_update_config.min_window_factor
-                };
-                adaptive_factor
+                }
             } else {
                 self.window_update_config.min_window_factor
             };
@@ -1991,11 +1961,7 @@ impl StreamManager {
                 let violation = FlowControlViolation {
                     violation_type: FlowControlViolationType::FinalSizeChanged,
                     stream_id: Some(stream_id),
-                    excess_amount: if new_final_size > existing_final_size {
-                        new_final_size - existing_final_size
-                    } else {
-                        existing_final_size - new_final_size
-                    },
+                    excess_amount: new_final_size.abs_diff(existing_final_size),
                     current_limit: existing_final_size,
                     attempted_value: new_final_size,
                     description: format!(
@@ -2042,40 +2008,7 @@ impl StreamManager {
         
         Ok(())
     }
-    
-    /// Check for stream count violations when creating streams
-    fn detect_stream_count_violations(&mut self, stream_type: StreamType) -> Result<()> {
-        let (current_count, max_count) = match stream_type {
-            StreamType::Bidirectional => {
-                (self.local_limits.current_bidi_streams, self.local_limits.max_bidi_streams)
-            }
-            StreamType::Unidirectional => {
-                (self.local_limits.current_uni_streams, self.local_limits.max_uni_streams)
-            }
-        };
-        
-        if current_count >= max_count {
-            let violation = FlowControlViolation {
-                violation_type: FlowControlViolationType::StreamCountExceeded,
-                stream_id: None,
-                excess_amount: (current_count + 1).saturating_sub(max_count),
-                current_limit: max_count,
-                attempted_value: current_count + 1,
-                description: format!(
-                    "Stream count limit exceeded: current {} streams, limit {} streams, type {:?}",
-                    current_count,
-                    max_count,
-                    stream_type
-                ),
-            };
-            
-            self.violation_tracker.record_violation(violation.clone());
-            return Err(crate::error_context::common_errors::stream_limit_error(violation.description));
-        }
-        
-        Ok(())
-    }
-    
+
     /// Get flow control violation statistics and recent violations
     pub fn get_flow_control_violation_stats(&self) -> (u64, usize, Vec<FlowControlViolation>) {
         let (total_violations, recent_count) = self.violation_tracker.get_violation_stats();

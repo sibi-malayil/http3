@@ -69,10 +69,10 @@ impl NetworkEndpoint {
     /// Create a new network endpoint
     pub async fn new(bind_addr: SocketAddr) -> Result<Self> {
         let socket = UdpSocket::bind(bind_addr).await
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
         
         let local_addr = socket.local_addr()
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
         
         let socket = Arc::new(socket);
         let (packet_tx, mut packet_rx) = mpsc::unbounded_channel::<(Bytes, SocketAddr)>();

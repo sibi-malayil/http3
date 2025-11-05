@@ -14,6 +14,12 @@ pub struct AsyncWhatHappened {
     _handle: tokio::task::JoinHandle<()>,
 }
 
+impl Default for AsyncWhatHappened {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AsyncWhatHappened {
     /// Create a new async event processor
     pub fn new() -> Self {

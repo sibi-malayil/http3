@@ -176,7 +176,7 @@ impl EnhancedEncoder {
             // Indexed field line - static table (1xxxxxxx)
             buf.put_u8(0x80 | (index as u8 & 0x7F));
             if index >= 64 {
-                VarInt((index - 64) as u64).encode(buf)?;
+                VarInt(index - 64).encode(buf)?;
             }
             return Ok(());
         }
@@ -199,13 +199,13 @@ impl EnhancedEncoder {
                 // Never indexed (0001xxxx)
                 buf.put_u8(0x10 | (name_index as u8 & 0x0F));
                 if name_index >= 16 {
-                    VarInt((name_index - 16) as u64).encode(buf)?;
+                    VarInt(name_index - 16).encode(buf)?;
                 }
             } else {
                 // Without never index (01xxxxxx)
                 buf.put_u8(0x40 | (name_index as u8 & 0x3F));
                 if name_index >= 64 {
-                    VarInt((name_index - 64) as u64).encode(buf)?;
+                    VarInt(name_index - 64).encode(buf)?;
                 }
             }
             // Encode value

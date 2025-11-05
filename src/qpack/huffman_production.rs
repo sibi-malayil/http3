@@ -313,7 +313,7 @@ impl HuffmanEncoder {
         
         // Calculate exact output size
         let output_bits = Self::calculate_output_bits(data);
-        let output_bytes = (output_bits + 7) / 8;
+        let output_bytes = output_bits.div_ceil(8);
         
         // Security: Check output size limit
         if output_bytes > MAX_ENCODED_SIZE {
@@ -390,7 +390,7 @@ impl HuffmanEncoder {
         }
         
         let output_bits = Self::calculate_output_bits(data);
-        let size = (output_bits + 7) / 8;
+        let size = output_bits.div_ceil(8);
         
         if size > MAX_ENCODED_SIZE {
             None

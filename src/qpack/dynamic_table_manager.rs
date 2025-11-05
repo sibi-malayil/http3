@@ -333,7 +333,7 @@ impl DynamicTableManager {
             if let Some(name_index) = crate::qpack::StaticTable::find_name(&field.name) {
                 instructions.push(EncoderInstruction::InsertWithNameReference {
                     table: true, // Static table
-                    name_index: name_index as u64,
+                    name_index,
                     value: field.value,
                 });
             } else {

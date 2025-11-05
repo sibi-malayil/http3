@@ -205,13 +205,13 @@ impl WebTransportSession {
     pub fn add_stream(&mut self, stream_id: StreamId, stream_type: WebTransportStreamType) {
         self.streams.insert(stream_id, stream_type);
         self.stats.streams_created += 1;
-        let _ = self.mark_active();
+        self.mark_active();
     }
 
     /// Remove a stream from this session
     pub fn remove_stream(&mut self, stream_id: StreamId) {
         self.streams.remove(&stream_id);
-        let _ = self.mark_active();
+        self.mark_active();
     }
 
     /// Check if session is active

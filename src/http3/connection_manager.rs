@@ -391,11 +391,10 @@ impl ConnectionManager {
             let mut to_remove = Vec::new();
 
             for (stream_id, stream) in streams.iter() {
-                if matches!(stream.state, StreamState::Closed | StreamState::Reset) {
-                    if now.duration_since(stream.last_activity) > retention_duration {
+                if matches!(stream.state, StreamState::Closed | StreamState::Reset)
+                    && now.duration_since(stream.last_activity) > retention_duration {
                         to_remove.push(*stream_id);
                     }
-                }
             }
 
             for stream_id in &to_remove {
@@ -425,9 +424,9 @@ impl ConnectionManager {
     
     async fn ensure_stream_exists(&self, stream_id: u64) -> Result<()> {
         let mut streams = self.streams.write().await;
-        if !streams.contains_key(&stream_id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = streams.entry(stream_id) {
             let stream_info = StreamInfo::new(stream_id);
-            streams.insert(stream_id, stream_info);
+            e.insert(stream_info);
 
             let mut stats = self.stats.write().await;
             stats.streams_created += 1;

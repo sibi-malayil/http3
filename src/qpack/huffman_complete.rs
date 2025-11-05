@@ -197,11 +197,10 @@ impl HuffmanDecoder {
             let last_byte_idx = (bit_offset - 1) / 8;
             let bits_in_last_byte = 8 - (bit_offset % 8);
             
-            if bits_in_last_byte > 0 && bits_in_last_byte < 8 {
-                if !Self::is_valid_padding(&encoded[last_byte_idx..], 8 - bits_in_last_byte) {
+            if bits_in_last_byte > 0 && bits_in_last_byte < 8
+                && !Self::is_valid_padding(&encoded[last_byte_idx..], 8 - bits_in_last_byte) {
                     return Err(Error::QpackHuffmanError);
                 }
-            }
         }
         
         Ok(result)
@@ -294,7 +293,7 @@ impl HuffmanEncoder {
         for &byte in data {
             total_bits += HUFFMAN_ENCODE_TABLE[byte as usize].bits as usize;
         }
-        (total_bits + 7) / 8 // Round up to nearest byte
+        total_bits.div_ceil(8) // Round up to nearest byte
     }
 }
 

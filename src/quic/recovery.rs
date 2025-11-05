@@ -772,11 +772,11 @@ impl RecoveryManager {
         let loss_delay = if self.using_time_loss_detection {
             let rtt = self.rtt_estimator.rtt();
             // RFC 9002: time_threshold = max(9/8 * max(smoothed_rtt, latest_rtt), granularity)
-            let time_threshold = rtt.saturating_mul(self.time_reordering_fraction)
+            
+            rtt.saturating_mul(self.time_reordering_fraction)
                 .checked_div(K_TIME_THRESHOLD_DENOMINATOR)
                 .unwrap_or(K_GRANULARITY)
-                .max(K_GRANULARITY);
-            time_threshold
+                .max(K_GRANULARITY)
         } else {
             Duration::MAX
         };

@@ -161,7 +161,7 @@ impl DatagramManager {
         }
 
         // Get or create queue for this stream
-        let queue = self.outgoing_queue.entry(stream_id).or_insert_with(VecDeque::new);
+        let queue = self.outgoing_queue.entry(stream_id).or_default();
 
         // Check queue limit
         if queue.len() >= self.config.max_queue_size {

@@ -95,7 +95,7 @@ impl AckManager {
         self.received_packets.insert(packet_number);
 
         // Update largest received
-        if self.largest_received.map_or(true, |largest| packet_number > largest) {
+        if self.largest_received.is_none_or(|largest| packet_number > largest) {
             self.largest_received = Some(packet_number);
             self.largest_received_time = Some(receive_time);
         }

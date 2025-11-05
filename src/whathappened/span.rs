@@ -10,12 +10,19 @@ static SPAN_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 /// A span represents a unit of work with a beginning and end
 #[derive(Debug, Clone)]
 pub struct Span {
+    /// Unique identifier for this span
     pub id: u64,
+    /// Human-readable name describing this span
     pub name: String,
+    /// Module or component that created this span
     pub target: &'static str,
+    /// Logging level for events within this span
     pub level: Level,
+    /// ID of the parent span, if any
     pub parent_id: Option<u64>,
+    /// Additional key-value fields attached to this span
     pub fields: Vec<(String, String)>,
+    /// When this span was created
     pub start_time: Instant,
 }
 
@@ -89,6 +96,7 @@ pub struct Instrumented<T> {
 }
 
 impl<T> Instrumented<T> {
+    /// Create a new instrumented future with the given span
     #[must_use]
     pub fn new(inner: T, span: Span) -> Self {
         Self {
@@ -120,6 +128,7 @@ pub struct SpanBuilder {
 }
 
 impl SpanBuilder {
+    /// Create a new span builder with the given name and target
     #[must_use]
     pub fn new(name: impl Into<String>, target: &'static str) -> Self {
         Self {
@@ -129,18 +138,21 @@ impl SpanBuilder {
             fields: Vec::new(),
         }
     }
-    
+
+    /// Set the logging level for this span
     #[must_use]
     pub fn level(mut self, level: Level) -> Self {
         self.level = level;
         self
     }
-    
+
+    /// Add a key-value field to this span
     pub fn field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.fields.push((key.into(), value.into()));
         self
     }
-    
+
+    /// Build and enter the span, returning a handle
     #[must_use]
     pub fn enter(self) -> SpanHandle {
         let mut span = Span::new(self.name, self.target, self.level);

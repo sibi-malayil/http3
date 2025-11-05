@@ -2,22 +2,7 @@
 #![forbid(unsafe_code)]
 #![warn(
     clippy::all,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo,
-    missing_docs,
-    rust_2018_idioms
-)]
-#![allow(
-    clippy::module_name_repetitions,
-    clippy::similar_names,
-    clippy::too_many_lines,
-    clippy::type_complexity,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::redundant_else,
-    clippy::unreadable_literal,
-    dead_code,
+    rust_2018_idioms,
     missing_docs
 )]
 

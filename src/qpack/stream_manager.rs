@@ -60,12 +60,12 @@ impl ReferenceTracker {
     fn add_reference(&mut self, stream_id: u64, absolute_index: u64) {
         self.stream_references
             .entry(stream_id)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(absolute_index);
         
         self.index_references
             .entry(absolute_index)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(stream_id);
     }
 

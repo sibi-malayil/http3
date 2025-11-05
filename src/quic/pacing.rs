@@ -302,14 +302,10 @@ impl PacingController {
         self.token_bucket.try_consume(tokens_consumed);
         
         // Update burst allowance
-        match self.state {
-            PacingState::Burst => {
-                if self.burst_allowance > 0 {
-                    self.burst_allowance -= 1;
-                }
+        if self.state == PacingState::Burst
+            && self.burst_allowance > 0 {
+                self.burst_allowance -= 1;
             }
-            _ => {}
-        }
 
         // Update statistics
         self.packets_sent += 1;

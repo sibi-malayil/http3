@@ -55,6 +55,7 @@ impl fmt::Display for Level {
 /// Level filter for controlling which events are logged
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(usize)]
+#[derive(Default)]
 pub enum LevelFilter {
     /// Disable all logging
     Off = 0,
@@ -65,6 +66,7 @@ pub enum LevelFilter {
     /// Log warnings and above
     Warn = 3,
     /// Log info and above
+    #[default]
     Info = 4,
     /// Log debug and above
     Debug = 5,
@@ -92,8 +94,3 @@ impl From<Level> for LevelFilter {
     }
 }
 
-impl Default for LevelFilter {
-    fn default() -> Self {
-        LevelFilter::Info
-    }
-}

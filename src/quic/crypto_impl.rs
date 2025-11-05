@@ -42,12 +42,6 @@ const INITIAL_SALT: &[u8] = &[
     0xcc, 0xbb, 0x7f, 0x0a,
 ];
 
-/// Packet number length
-const PN_LENGTH: usize = 4; // We'll use 4-byte packet numbers for simplicity
-
-/// Key phase bit position in short header
-const KEY_PHASE_BIT: u8 = 0x04;
-
 /// Packet protection level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PacketProtectionLevel {
@@ -111,15 +105,6 @@ impl CryptoBuffer {
         
         ready_data
     }
-    
-    /// Check if there's a gap in the expected data
-    fn has_gap(&self) -> bool {
-        if let Some(first_offset) = self.buffer.keys().next() {
-            *first_offset > self.next_expected_offset
-        } else {
-            false
-        }
-    }
 }
 
 /// QUIC crypto state manager
@@ -148,8 +133,6 @@ pub struct CryptoManager {
     key_phase: bool,
     /// Highest packet number sent
     highest_sent_pn: u64,
-    /// Highest packet number received
-    highest_recv_pn: u64,
     /// Count of handshake packets sent (for proper packet type selection)
     handshake_send_count: u32,
     /// Whether we've sent our first crypto response (for servers)
@@ -180,7 +163,6 @@ pub struct HeaderProtectionKey {
 struct KeyUsageStats {
     packets_sent: u64,
     bytes_sent: u64,
-    key_install_time: std::time::Instant,
 }
 
 /// Packet protection keys for a given encryption level
@@ -272,7 +254,6 @@ impl CryptoManager {
             next_application_keys_rustls: None,
             key_phase: false,
             highest_sent_pn: 0,
-            highest_recv_pn: 0,
             handshake_send_count: 0,
             initial_crypto_sent: false,
             crypto_buffer: CryptoBuffer::new(),
@@ -380,7 +361,6 @@ impl CryptoManager {
             next_application_keys_rustls: None,
             key_phase: false,
             highest_sent_pn: 0,
-            highest_recv_pn: 0,
             handshake_send_count: 0,
             initial_crypto_sent: false,
             crypto_buffer: CryptoBuffer::new(),
@@ -406,7 +386,7 @@ impl CryptoManager {
         let key_der = cert.signing_key.serialize_der();
         
         let cert_chain = vec![
-            rustls::pki_types::CertificateDer::from(cert_der.clone())
+            cert_der.clone()
         ];
         let private_key = rustls::pki_types::PrivateKeyDer::try_from(key_der)
             .map_err(|e| Error::TlsError(format!("Failed to load private key: {:?}", e)))?;
@@ -456,7 +436,6 @@ impl CryptoManager {
             next_application_keys_rustls: None,
             key_phase: false,
             highest_sent_pn: 0,
-            highest_recv_pn: 0,
             handshake_send_count: 0,
             initial_crypto_sent: false,
             crypto_buffer: CryptoBuffer::new(),
@@ -669,7 +648,6 @@ impl CryptoManager {
         Some(KeyUsageStats {
             packets_sent: 0,
             bytes_sent: 0,
-            key_install_time: std::time::Instant::now(),
         })
     }
     
@@ -1328,8 +1306,8 @@ impl CryptoManager {
             
             // Fill with deterministic data based on label and context for now
             for (i, byte) in output.iter_mut().enumerate() {
-                *byte = ((i as u8) ^ label.get(i % label.len()).unwrap_or(&0) ^ 
-                        context.get(i % context.len().max(1)).unwrap_or(&0)) as u8;
+                *byte = (i as u8) ^ label.get(i % label.len()).unwrap_or(&0) ^ 
+                        context.get(i % context.len().max(1)).unwrap_or(&0);
             }
             
             return Ok(output);
@@ -1452,10 +1430,7 @@ impl CryptoManager {
         };
         
         // Derive QUIC packet keys from TLS secrets
-        match derive_packet_keys(&secrets) {
-            Ok(keys) => Some(keys),
-            Err(_) => None,
-        }
+        derive_packet_keys(&secrets).ok()
     }
     
     /// Get handshake secrets from TLS connection
@@ -1594,10 +1569,7 @@ impl CryptoManager {
         // Don't add role-specific variation for test keys
         // Both client and server should use the same keys for testing
         
-        match derive_packet_keys(&secret) {
-            Ok(keys) => Some(keys),
-            Err(_) => None,
-        }
+        derive_packet_keys(&secret).ok()
     }
 
     /// Encrypt a packet with proper header protection
@@ -1765,7 +1737,7 @@ impl CryptoManager {
             );
             if let Ok(pn_offset) = self.get_pn_offset(&packet_data[..header_len]) {
                 let pn_length = ((packet_data[0] & 0x03) + 1) as usize;
-                debug_assert!(pn_length >= 1 && pn_length <= 4, "Invalid packet number length: {}", pn_length);
+                debug_assert!((1..=4).contains(&pn_length), "Invalid packet number length: {}", pn_length);
                 debug!("PN offset: {}, length: {}", pn_offset, pn_length);
             }
         }
@@ -1796,7 +1768,7 @@ impl CryptoManager {
                 // Apply header protection using rustls
                 // Extract packet number length from first byte
                 let pn_length = ((packet_data[0] & 0x03) + 1) as usize;
-                debug_assert!(pn_length >= 1 && pn_length <= 4, "Invalid packet number length: {}", pn_length);
+                debug_assert!((1..=4).contains(&pn_length), "Invalid packet number length: {}", pn_length);
                 
                 // Apply header protection using rustls
                 // Note: rustls expects exactly 4 bytes for packet number, even if the actual PN is shorter
@@ -2108,7 +2080,7 @@ impl CryptoManager {
                 // For encryption, use send keys; this method is called by encrypt_packet
                 self.initial_send_keys.as_ref()
                     .map(KeysWrapper::Ring)
-                    .ok_or_else(|| Error::CryptoError(format!("No initial send keys available")))
+                    .ok_or_else(|| Error::CryptoError("No initial send keys available".to_string()))
             }
             PacketType::Handshake => {
                 // Temporarily disable rustls keys and use ring-based keys
@@ -2116,7 +2088,7 @@ impl CryptoManager {
                 if let Some(keys) = self.handshake_keys.as_ref() {
                     Ok(KeysWrapper::Ring(keys))
                 } else {
-                    Err(Error::CryptoError(format!("No handshake keys available")))
+                    Err(Error::CryptoError("No handshake keys available".to_string()))
                 }
             }
             PacketType::ZeroRtt | PacketType::OneRtt => {
@@ -2144,7 +2116,7 @@ impl CryptoManager {
                             ConnectionRole::Server => KeysWrapper::Rustls(&keys.local),  // Server also sends with local
                         })
                     } else {
-                        Err(Error::CryptoError(format!("No application keys available")))
+                        Err(Error::CryptoError("No application keys available".to_string()))
                     }
                 }
             }
@@ -2168,7 +2140,7 @@ impl CryptoManager {
                 // For decryption, use receive keys
                 self.initial_recv_keys.as_ref()
                     .map(KeysWrapper::Ring)
-                    .ok_or_else(|| Error::CryptoError(format!("No initial receive keys available")))
+                    .ok_or_else(|| Error::CryptoError("No initial receive keys available".to_string()))
             }
             PacketType::Handshake => {
                 // Temporarily disable rustls keys and use ring-based keys
@@ -2178,7 +2150,7 @@ impl CryptoManager {
                     Ok(KeysWrapper::Ring(keys))
                 } else {
                     warn!("No handshake keys available!");
-                    Err(Error::CryptoError(format!("No handshake keys available")))
+                    Err(Error::CryptoError("No handshake keys available".to_string()))
                 }
             }
             PacketType::ZeroRtt | PacketType::OneRtt => {
@@ -2588,7 +2560,7 @@ impl CryptoManager {
                 let pn_length = self.encode_packet_number_length(pn);
                 Ok(PacketHeader::Short(crate::quic::packet::ShortHeader {
                     dst_cid: self.remote_cid()?,
-                    packet_number: self.encode_packet_number(pn, pn_length)? as u32,
+                    packet_number: self.encode_packet_number(pn, pn_length)?,
                     spin_bit: false, // TODO: Implement spin bit logic
                     key_phase: self.key_phase,
                 }))

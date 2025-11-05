@@ -58,6 +58,12 @@ pub struct PacketNumberSpace {
     sent_packet_numbers: HashMap<u64, PacketNumberLength>,
 }
 
+impl Default for PacketNumberSpace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PacketNumberSpace {
     /// Creates a new packet number space
     pub fn new() -> Self {

@@ -225,15 +225,14 @@ impl CubicController {
 
         match self.state {
             CubicState::SlowStart => {
-                if self.hystart.enabled && !self.hystart.found_exit {
-                    if self.hystart_exit_point(rtt, now) {
+                if self.hystart.enabled && !self.hystart.found_exit
+                    && self.hystart_exit_point(rtt, now) {
                         self.exit_slow_start(now);
                         return;
                     }
-                }
                 
                 // Standard slow start - increase cwnd by 1 for each ACK
-                let acked_packets = (acked_bytes + self.mss as u64 - 1) / self.mss as u64;
+                let acked_packets = acked_bytes.div_ceil(self.mss as u64);
                 self.cwnd = min(self.cwnd + acked_packets as u32, u32::MAX - 1000);
                 
                 // Check if we should exit slow start
@@ -413,8 +412,8 @@ impl CubicController {
         }
 
         // Delay increase detection
-        if self.hystart.round_counter >= self.config.hystart_round_thresh {
-            if self.hystart.last_round_min_rtt != Duration::MAX {
+        if self.hystart.round_counter >= self.config.hystart_round_thresh
+            && self.hystart.last_round_min_rtt != Duration::MAX {
                 let delay_increase = self.hystart.curr_round_min_rtt
                     .saturating_sub(self.hystart.last_round_min_rtt);
                 
@@ -428,7 +427,6 @@ impl CubicController {
                     return true;
                 }
             }
-        }
 
         false
     }

@@ -195,7 +195,7 @@ impl Encoder {
         
         // Consider adding to dynamic table if beneficial
         if !field.never_index() && self.should_index(field) {
-            if let Err(_) = self.dynamic_table.insert(field.clone()) {
+            if self.dynamic_table.insert(field.clone()).is_err() {
                 // Table full, ignore error
             } else {
                 // Send insert instruction
@@ -427,7 +427,7 @@ impl Encoder {
         if let Some(name_index) = StaticTable::find_name(&field.name) {
             self.pending_instructions.push_back(EncoderInstruction::InsertWithNameReference {
                 table: true, // Static table
-                name_index: name_index as u64,
+                name_index,
                 value: field.value.clone(),
             });
         } else if let Some(name_index) = self.find_name_in_dynamic_table(&field.name) {

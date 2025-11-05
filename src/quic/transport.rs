@@ -364,7 +364,7 @@ impl TransportParameters {
         // Complex validation using multiple conditions in let chains
         if let Some(max_size) = self.max_udp_payload_size
             && let size = max_size.into_inner()
-            && (size < 1200 || size > 65527)
+            && !(1200..=65527).contains(&size)
         {
             return Err(Error::Config("Max UDP payload size must be between 1200 and 65527".to_string()));
         }

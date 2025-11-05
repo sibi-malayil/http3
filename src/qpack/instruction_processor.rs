@@ -105,11 +105,11 @@ impl EncoderInstructionProcessor {
                 let name = if table {
                     // Static table reference
                     StaticTable::get_name(name_index)
-                        .ok_or_else(|| Error::QpackInvalidIndex)?
+                        .ok_or(Error::QpackInvalidIndex)?
                 } else {
                     // Dynamic table reference
                     dynamic_table.get(name_index)
-                        .ok_or_else(|| Error::QpackInvalidIndex)?
+                        .ok_or(Error::QpackInvalidIndex)?
                         .name.clone()
                 };
                 

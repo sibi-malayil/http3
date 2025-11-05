@@ -584,11 +584,10 @@ impl FrameParser {
     pub fn parse_frame(&mut self) -> Result<Option<Http3Frame>> {
         loop {
             // If we don't have a frame type yet, try to read it
-            if self.frame_type.is_none() {
-                if !self.try_read_frame_header()? {
+            if self.frame_type.is_none()
+                && !self.try_read_frame_header()? {
                     return Ok(None);
                 }
-            }
 
             // Check if we have enough data for the complete frame
             if let Some(expected_len) = self.expected_length {

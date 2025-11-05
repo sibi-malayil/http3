@@ -544,7 +544,7 @@ impl Connection {
         // If server receives Initial packet while in Initial state, transition to Handshaking
         if self.role == ConnectionRole::Server && 
            self.state == ConnectionState::Initial &&
-           packet_data.len() > 0 && (packet_data[0] & 0xf0) == 0xc0 {
+           !packet_data.is_empty() && (packet_data[0] & 0xf0) == 0xc0 {
             eprintln!("Server transitioning to Handshaking state after receiving Initial packet");
             self.state = ConnectionState::Handshaking;
         }
@@ -825,7 +825,7 @@ impl Connection {
             }
             Frame::ConnectionClose { error_code, frame_type: _, reason_phrase } => {
                 self.state = ConnectionState::Closing {
-                    error_code: ConnectionErrorCode::try_from(error_code as u64)?,
+                    error_code: ConnectionErrorCode::try_from(error_code)?,
                     reason: String::from_utf8_lossy(&reason_phrase).to_string(),
                     drain_timeout: Instant::now() + Duration::from_secs(3),
                 };
@@ -876,13 +876,11 @@ impl Connection {
                         self.pending_frames.push_back(Frame::DataBlocked {
                             maximum_data: self.flow_control.max_data,
                         });
-                    } else {
-                        if let Some(stats) = self.stream_manager.stream_stats(stream_id) {
-                            self.pending_frames.push_back(Frame::StreamDataBlocked {
-                                stream_id,
-                                maximum_stream_data: stats.max_data_send,
-                            });
-                        }
+                    } else if let Some(stats) = self.stream_manager.stream_stats(stream_id) {
+                        self.pending_frames.push_back(Frame::StreamDataBlocked {
+                            stream_id,
+                            maximum_stream_data: stats.max_data_send,
+                        });
                     }
                 }
                 _ => {}

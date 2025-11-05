@@ -313,8 +313,8 @@ impl MigrationManager {
 
         for (path_id, path_info) in paths.iter_mut() {
             if let PathState::Validating { started_at, attempts, .. } = &path_info.state {
-                if now.duration_since(*started_at) > self.config.validation_timeout {
-                    if *attempts >= self.config.max_validation_attempts {
+                if now.duration_since(*started_at) > self.config.validation_timeout
+                    && *attempts >= self.config.max_validation_attempts {
                         // Copy values before modification to avoid borrow issues
                         let path_id_copy = *path_id;
                         let attempts_copy = *attempts;
@@ -333,7 +333,6 @@ impl MigrationManager {
                             "attempts" => attempts_copy
                         );
                     }
-                }
             }
         }
 
