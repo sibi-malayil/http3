@@ -675,25 +675,26 @@ impl ServerPushManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::qpack::field::{HeaderName, HeaderValue};
 
     fn create_test_headers() -> Vec<HeaderField> {
         vec![
-            HeaderField {
-                name: b":method".to_vec(),
-                value: b"GET".to_vec(),
-            },
-            HeaderField {
-                name: b":scheme".to_vec(),
-                value: b"https".to_vec(),
-            },
-            HeaderField {
-                name: b":authority".to_vec(),
-                value: b"example.com".to_vec(),
-            },
-            HeaderField {
-                name: b":path".to_vec(),
-                value: b"/style.css".to_vec(),
-            },
+            HeaderField::new(
+                HeaderName::from(":method"),
+                HeaderValue::from("GET"),
+            ),
+            HeaderField::new(
+                HeaderName::from(":scheme"),
+                HeaderValue::from("https"),
+            ),
+            HeaderField::new(
+                HeaderName::from(":authority"),
+                HeaderValue::from("example.com"),
+            ),
+            HeaderField::new(
+                HeaderName::from(":path"),
+                HeaderValue::from("/style.css"),
+            ),
         ]
     }
 
@@ -763,20 +764,20 @@ mod tests {
         
         // Missing :path header
         let invalid_headers = vec![
-            HeaderField { name: b":method".to_vec(), value: b"GET".to_vec() },
-            HeaderField { name: b":scheme".to_vec(), value: b"https".to_vec() },
-            HeaderField { name: b":authority".to_vec(), value: b"example.com".to_vec() },
+            HeaderField::new(HeaderName::from(":method"), HeaderValue::from("GET")),
+            HeaderField::new(HeaderName::from(":scheme"), HeaderValue::from("https")),
+            HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),
         ];
-        
+
         let result = manager.create_push_promise(1, invalid_headers).await;
         assert!(result.is_err());
-        
+
         // Unsafe method
         let unsafe_headers = vec![
-            HeaderField { name: b":method".to_vec(), value: b"POST".to_vec() },
-            HeaderField { name: b":scheme".to_vec(), value: b"https".to_vec() },
-            HeaderField { name: b":authority".to_vec(), value: b"example.com".to_vec() },
-            HeaderField { name: b":path".to_vec(), value: b"/api".to_vec() },
+            HeaderField::new(HeaderName::from(":method"), HeaderValue::from("POST")),
+            HeaderField::new(HeaderName::from(":scheme"), HeaderValue::from("https")),
+            HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),
+            HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/api")),
         ];
         
         let result = manager.create_push_promise(1, unsafe_headers).await;
@@ -794,8 +795,8 @@ mod tests {
         
         // Start push stream
         let response_headers = vec![
-            HeaderField { name: b":status".to_vec(), value: b"200".to_vec() },
-            HeaderField { name: b"content-type".to_vec(), value: b"text/css".to_vec() },
+            HeaderField::new(HeaderName::from(":status"), HeaderValue::from("200")),
+            HeaderField::new(HeaderName::from("content-type"), HeaderValue::from("text/css")),
         ];
         
         manager.start_push_stream(push_id, 4, response_headers).await.unwrap();

@@ -478,7 +478,7 @@ mod tests {
 
         // Get received datagram
         let received = manager.next_received_datagram().unwrap();
-        assert_eq!(received.stream_id(), stream_id());
+        assert_eq!(received.stream_id, stream_id());
         assert_eq!(received.data, data);
     }
 
