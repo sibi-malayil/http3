@@ -1,5 +1,4 @@
 /// HTTP/3 message types (Request and Response)
-
 use std::collections::HashMap;
 
 /// HTTP/3 Request

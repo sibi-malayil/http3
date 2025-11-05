@@ -1,5 +1,4 @@
 /// Server builder for configuring HTTP/3 servers
-
 use crate::{
     error::{Error, Result},
     network::NetworkEndpoint,

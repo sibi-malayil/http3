@@ -1,5 +1,4 @@
 /// Client builder for configuring HTTP/3 clients
-
 use crate::{
     error::{Error, Result},
     qpack::{encoder::Encoder as QpackEncoder},

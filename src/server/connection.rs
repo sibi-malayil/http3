@@ -1,5 +1,4 @@
 /// HTTP/3 server connection
-
 use crate::{
     error::{Error, Result},
     http3::{Request, Response, connection::Connection as Http3Connection},

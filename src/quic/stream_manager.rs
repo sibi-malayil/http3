@@ -1288,10 +1288,23 @@ impl StreamManager {
                         "stream_id" => stream_id.into_inner(),
                         "offset" => offset,
                         "length" => send_data.len(),
-                        "fin" => fin
+                        "fin" => fin,
+                        "total_bytes_used" => bytes_used
                     );
                 }
             }
+        }
+
+        // Log final bytes usage for this packet
+        if bytes_used > 0 {
+            protocol_event!(
+                Level::Trace,
+                "Stream frame generation complete";
+                "stream_id" => stream_id.into_inner(),
+                "total_bytes_used" => bytes_used,
+                "max_bytes" => max_bytes,
+                "frames_generated" => frames.len()
+            );
         }
 
         Ok(frames)

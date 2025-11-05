@@ -573,8 +573,7 @@ impl RecoveryManager {
                         probe_frames.extend(prioritized_frames);
                     },
                     Err(_) => {
-                        // On error, continue with other spaces
-                        continue;
+                        // On error, skip this space and continue with other spaces
                     }
                 }
             }
