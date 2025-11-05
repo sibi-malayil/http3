@@ -802,17 +802,33 @@ impl RecoveryManager {
             let packet_threshold_loss = largest_acked.saturating_sub(pn) >= self.packet_reordering_threshold;
             
             if time_threshold_loss || packet_threshold_loss {
+                // Verify packet is in the correct space (defensive programming)
+                if packet.pn_space != pn_space {
+                    perf_event!(
+                        Level::Error,
+                        "Packet number space mismatch in loss detection";
+                        "packet_pn" => pn,
+                        "expected_space" => pn_space,
+                        "packet_space" => packet.pn_space
+                    );
+                    continue;
+                }
+
                 lost_packets.push(pn);
-                
-                // RFC 9002: Collect frames for retransmission with enhanced filtering
-                for frame in &packet.frames {
-                    if Self::should_retransmit_frame_static(frame) {
-                        if lost_frames.len() >= MAX_LOST_FRAMES {
-                            return Err(crate::error::Error::Internal(
-                                "Too many lost frames".to_string()
-                            ));
+
+                // RFC 9002: Skip retransmission for ACK-only packets
+                // ACK-only packets don't need to be retransmitted
+                if !packet.ack_only {
+                    // Collect frames for retransmission with enhanced filtering
+                    for frame in &packet.frames {
+                        if Self::should_retransmit_frame_static(frame) {
+                            if lost_frames.len() >= MAX_LOST_FRAMES {
+                                return Err(crate::error::Error::Internal(
+                                    "Too many lost frames".to_string()
+                                ));
+                            }
+                            lost_frames.push(frame.clone());
                         }
-                        lost_frames.push(frame.clone());
                     }
                 }
             }
@@ -830,8 +846,10 @@ impl RecoveryManager {
                     Level::Warn,
                     "Packet declared lost";
                     "packet_number" => pn,
-                    "pn_space" => pn_space,
+                    "pn_space" => packet.pn_space,
                     "packet_size" => packet.size,
+                    "ack_only" => packet.ack_only,
+                    "ack_eliciting" => packet.ack_eliciting,
                     "time_since_sent_ms" => now.duration_since(packet.sent_time).as_millis()
                 );
 
