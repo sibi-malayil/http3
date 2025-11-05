@@ -824,9 +824,15 @@ impl Connection {
                 }
             }
             Frame::ConnectionClose { error_code, frame_type: _, reason_phrase } => {
+                let error_code_enum = ConnectionErrorCode::try_from(error_code)?;
+                let reason_string = String::from_utf8_lossy(&reason_phrase).to_string();
+
+                // Store close information for diagnostics and logging
+                self.close_info = Some((error_code_enum, reason_string.clone()));
+
                 self.state = ConnectionState::Closing {
-                    error_code: ConnectionErrorCode::try_from(error_code)?,
-                    reason: String::from_utf8_lossy(&reason_phrase).to_string(),
+                    error_code: error_code_enum,
+                    reason: reason_string,
                     drain_timeout: Instant::now() + Duration::from_secs(3),
                 };
             }
@@ -1021,7 +1027,10 @@ impl Connection {
             "role" => self.role,
             "local_cid" => self.local_cid
         );
-        
+
+        // Store close information for diagnostics
+        self.close_info = Some((error_code, reason.clone()));
+
         self.state = ConnectionState::Closing {
             error_code,
             reason: reason.clone(),
