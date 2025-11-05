@@ -987,120 +987,6 @@ impl CryptoManager {
     }
     
 
-    /// Update keys from TLS connection secrets
-    fn update_keys_from_tls(&mut self) -> Result<()> {
-        // Extract real TLS secrets and derive QUIC packet protection keys
-        match &self.tls_conn {
-            QuicConnection::Client(conn) => {
-                // Install handshake keys if available and not already installed
-                if self.handshake_keys.is_none() && conn.is_handshaking() {
-                    if let Some(secret) = self.get_handshake_secrets() {
-                        if let Some(keys) = self.derive_keys_from_secret(&secret, PacketProtectionLevel::Handshake) {
-                            self.handshake_keys = Some(keys);
-                            crypto_event!(
-                                Level::Info,
-                                "Installed handshake keys from TLS secrets";
-                                "role" => self.role,
-                                "secret_len" => secret.len()
-                            );
-                        }
-                    } else {
-                        // Fallback to test keys for development if no TLS secrets
-                        if let Some(keys) = self.derive_test_keys(PacketProtectionLevel::Handshake) {
-                            self.handshake_keys = Some(keys);
-                            crypto_event!(
-                                Level::Warn,
-                                "Falling back to test keys for handshake";
-                                "role" => self.role
-                            );
-                        }
-                    }
-                }
-                
-                // Install application keys if TLS handshake is complete
-                if self.application_keys.is_none() && !conn.is_handshaking() {
-                    if let Some(secret) = self.get_application_secrets() {
-                        if let Some(keys) = self.derive_keys_from_secret(&secret, PacketProtectionLevel::Application) {
-                            self.application_keys = Some(keys);
-                            crypto_event!(
-                                Level::Info,
-                                "Installed application keys from TLS secrets";
-                                "role" => self.role,
-                                "secret_len" => secret.len()
-                            );
-                        }
-                    } else {
-                        // Fallback to test keys for development if no TLS secrets
-                        if let Some(keys) = self.derive_test_keys(PacketProtectionLevel::Application) {
-                            self.application_keys = Some(keys);
-                            crypto_event!(
-                                Level::Warn,
-                                "Falling back to test keys for application";
-                                "role" => self.role
-                            );
-                        }
-                    }
-                }
-            }
-            QuicConnection::Server(conn) => {
-                // Install handshake keys if available and not already installed
-                if self.handshake_keys.is_none() && conn.is_handshaking() {
-                    if let Some(secret) = self.get_handshake_secrets() {
-                        if let Some(keys) = self.derive_keys_from_secret(&secret, PacketProtectionLevel::Handshake) {
-                            self.handshake_keys = Some(keys);
-                            crypto_event!(
-                                Level::Info,
-                                "Installed handshake keys from TLS secrets";
-                                "role" => self.role,
-                                "secret_len" => secret.len()
-                            );
-                        }
-                    } else {
-                        // Fallback to test keys for development if no TLS secrets
-                        if let Some(keys) = self.derive_test_keys(PacketProtectionLevel::Handshake) {
-                            self.handshake_keys = Some(keys);
-                            crypto_event!(
-                                Level::Warn,
-                                "Falling back to test keys for handshake";
-                                "role" => self.role
-                            );
-                        }
-                    }
-                }
-                
-                // Install application keys if TLS handshake is complete
-                if self.application_keys.is_none() && !conn.is_handshaking() {
-                    if let Some(secret) = self.get_application_secrets() {
-                        if let Some(keys) = self.derive_keys_from_secret(&secret, PacketProtectionLevel::Application) {
-                            self.application_keys = Some(keys);
-                            crypto_event!(
-                                Level::Info,
-                                "Installed application keys from TLS secrets";
-                                "role" => self.role,
-                                "secret_len" => secret.len()
-                            );
-                        }
-                    } else {
-                        // Fallback to test keys for development if no TLS secrets
-                        if let Some(keys) = self.derive_test_keys(PacketProtectionLevel::Application) {
-                            self.application_keys = Some(keys);
-                            crypto_event!(
-                                Level::Warn,
-                                "Falling back to test keys for application";
-                                "role" => self.role
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Extract transport parameters if available
-        self.extract_transport_params()?;
-        
-        Ok(())
-    }
-    
     /// Install key changes from TLS using Rust 2024 let chains
     fn install_key_change(&mut self, key_change: rustls::quic::KeyChange) -> Result<()> {
         crypto_event!(
@@ -1179,95 +1065,7 @@ impl CryptoManager {
         
         Ok(())
     }
-    
-    /// Legacy install key change method for backward compatibility
-    fn install_legacy_key_change(&mut self, _key_change: rustls::quic::KeyChange) -> Result<()> {
-        crypto_event!(
-            Level::Debug,
-            "Installing legacy key change (not fully implemented)";
-            "key_change_type" => "KeyChange"
-        );
-        
-        // Legacy implementation that derives keys from secrets
-        if let Some(current_secret) = self.get_application_secrets() 
-            && let Some(packet_keys) = self.derive_keys_from_secret(&current_secret, PacketProtectionLevel::Application)
-        {
-            // Install the keys based on the TLS connection state
-            match &self.tls_conn {
-                QuicConnection::Client(conn) => {
-                    // Use let chains to determine the appropriate key level
-                    if conn.is_handshaking() 
-                        && self.handshake_keys.is_none()
-                    {
-                        self.handshake_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed handshake keys from TLS key change";
-                            "role" => self.role
-                        );
-                    } else if !conn.is_handshaking() 
-                        && self.application_keys.is_none()
-                    {
-                        self.application_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed application keys from TLS key change";
-                            "role" => self.role
-                        );
-                    } else {
-                        // Key update for existing application keys
-                        self.next_application_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed next application keys from TLS key change";
-                            "role" => self.role
-                        );
-                    }
-                }
-                QuicConnection::Server(conn) => {
-                    // Similar logic for server side
-                    if conn.is_handshaking() 
-                        && self.handshake_keys.is_none()
-                    {
-                        self.handshake_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed handshake keys from TLS key change";
-                            "role" => self.role
-                        );
-                    } else if !conn.is_handshaking() 
-                        && self.application_keys.is_none()
-                    {
-                        self.application_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed application keys from TLS key change";
-                            "role" => self.role
-                        );
-                    } else {
-                        // Key update for existing application keys
-                        self.next_application_keys = Some(packet_keys);
-                        crypto_event!(
-                            Level::Info,
-                            "Installed next application keys from TLS key change";
-                            "role" => self.role
-                        );
-                    }
-                }
-            }
-            
-            Ok(())
-        } else {
-            crypto_event!(
-                Level::Error,
-                "Failed to derive keys from TLS key change";
-                "role" => self.role
-            );
-            Err(Error::TlsError("Failed to derive keys from TLS key change".to_string()))
-        }
-    }
-    
-    
+
     /// Export keying material for 0-RTT
     /// 
     /// # Errors
@@ -1354,100 +1152,7 @@ impl CryptoManager {
         Ok(Bytes::from(protected))
     }
 
-    /// Get handshake keys from TLS connection
-    fn get_handshake_keys(&self) -> Option<PacketKeys> {
-        // Extract handshake keys from rustls QUIC connection
-        match &self.tls_conn {
-            QuicConnection::Client(conn) => {
-                if let Some(_keys) = conn.quic_transport_parameters() {
-                    // In a real implementation, we would derive keys from the TLS secrets
-                    // For now, use a deterministic derivation based on connection state
-                    self.derive_keys_from_connection_state(PacketProtectionLevel::Handshake)
-                } else {
-                    None
-                }
-            }
-            QuicConnection::Server(conn) => {
-                if let Some(_keys) = conn.quic_transport_parameters() {
-                    self.derive_keys_from_connection_state(PacketProtectionLevel::Handshake)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    /// Get application data keys from TLS connection
-    fn get_application_keys(&self) -> Option<PacketKeys> {
-        // Extract application keys from rustls QUIC connection
-        match &self.tls_conn {
-            QuicConnection::Client(conn) => {
-                if !conn.is_handshaking() {
-                    // Handshake is complete, derive application keys
-                    self.derive_keys_from_connection_state(PacketProtectionLevel::Application)
-                } else {
-                    None
-                }
-            }
-            QuicConnection::Server(conn) => {
-                if !conn.is_handshaking() {
-                    self.derive_keys_from_connection_state(PacketProtectionLevel::Application)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-    
-    /// Derive keys from TLS connection state using proper key extraction
-    /// Implements RFC 9001 Section 5 key derivation
-    fn derive_keys_from_connection_state(&self, level: PacketProtectionLevel) -> Option<PacketKeys> {
-        // Try to extract keys from TLS connection first
-        if let Some(keys) = self.extract_tls_keys(level) {
-            return Some(keys);
-        }
-        
-        // Fallback to deterministic key generation for testing/development
-        self.derive_test_keys(level)
-    }
-    
-    /// Extract actual keys from TLS connection state
-    fn extract_tls_keys(&self, level: PacketProtectionLevel) -> Option<PacketKeys> {
-        // Get the appropriate TLS secrets based on encryption level
-        let secrets = match level {
-            PacketProtectionLevel::Initial => {
-                // Initial keys are always derived from connection ID, not TLS
-                return None;
-            }
-            PacketProtectionLevel::Handshake => {
-                // Try to extract handshake secrets from TLS
-                self.get_handshake_secrets()?
-            }
-            PacketProtectionLevel::Application => {
-                // Try to extract application secrets from TLS  
-                self.get_application_secrets()?
-            }
-        };
-        
-        // Derive QUIC packet keys from TLS secrets
-        derive_packet_keys(&secrets).ok()
-    }
-    
-    /// Get handshake secrets from TLS connection
-    fn get_handshake_secrets(&self) -> Option<Vec<u8>> {
-        // Note: rustls QUIC API doesn't directly expose TLS secrets.
-        // Instead, it provides ready-to-use keys through KeyChange events.
-        // This method is kept for legacy compatibility but returns None
-        // to force usage of rustls keys when available.
-        crypto_event!(
-            Level::Debug,
-            "Handshake secrets requested - using rustls keys instead";
-            "role" => self.role
-        );
-        None
-    }
-    
-    /// Get application data secrets from TLS connection  
+    /// Get application data secrets from TLS connection
     fn get_application_secrets(&self) -> Option<Vec<u8>> {
         // Note: rustls QUIC API doesn't directly expose TLS secrets.
         // Instead, it provides ready-to-use keys through KeyChange events.
@@ -3378,12 +3083,6 @@ impl CryptoManager {
     }
 }
 
-/// Secrets for a given encryption level
-struct Secrets {
-    local: Vec<u8>,
-    remote: Vec<u8>,
-}
-
 /// Header parsing information
 #[derive(Debug, Clone)]
 struct HeaderInfo {
@@ -3531,25 +3230,6 @@ impl HeaderProtectionKey {
         // Proper AES-ECB header protection per RFC 9001 Section 5.4.1
         // mask = AES-ECB(hp_key, sample[0..16])
         self.mask_aes_ecb(&sample[..16])
-    }
-    
-    /// Generate header protection mask using HMAC-based PRF
-    /// This is used as a fallback when AES-ECB simulation fails
-    fn mask_proper(&self, sample: &[u8]) -> Result<[u8; 5]> {
-        if sample.len() < 16 {
-            return Err(Error::CryptoError("Sample too short".to_string()));
-        }
-        
-        // Use HMAC as a PRF to generate the mask
-        use ring::hmac;
-        
-        let key = hmac::Key::new(hmac::HMAC_SHA256, &self.key);
-        let tag = hmac::sign(&key, &sample[..16]);
-        
-        let mut mask = [0u8; 5];
-        mask.copy_from_slice(&tag.as_ref()[..5]);
-        
-        Ok(mask)
     }
     
     /// Generate header protection mask using proper AES-ECB implementation
