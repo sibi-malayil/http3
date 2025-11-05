@@ -328,14 +328,20 @@ impl BBRController {
     pub fn on_ack(&mut self, acked_bytes: u64, rtt: Duration, now: Instant) -> Result<()> {
         // Update delivered counter
         self.delivered += acked_bytes;
-        
+
+        // Decrement packets_out when acked
+        if acked_bytes >= self.mss {
+            let packets_acked = acked_bytes / self.mss;
+            self.packets_out = self.packets_out.saturating_sub(packets_acked);
+        }
+
         // Add RTT sample
         self.rtt_filter.add_sample(rtt, now);
-        
+
         // Calculate delivery rate for this ACK
         if acked_bytes > 0 && rtt > Duration::ZERO {
             let delivery_rate = (acked_bytes * 1_000_000) / rtt.as_micros() as u64;
-            
+
             let is_app_limited = self.delivered <= self.app_limited;
             let sample = DeliveryRateSample {
                 rate: delivery_rate,
@@ -345,29 +351,29 @@ impl BBRController {
                 is_retransmit: false, // TODO: Track retransmissions properly
                 is_app_limited,
             };
-            
+
             // Only use non-app-limited samples for bandwidth estimation
             if !is_app_limited {
                 self.bandwidth_filter.add_sample(delivery_rate, now);
             }
-            
+
             self.delivery_rate_samples.push_back(sample);
             if self.delivery_rate_samples.len() > 10 {
                 self.delivery_rate_samples.pop_front();
             }
         }
-        
+
         // Check for round trip completion
         if self.delivered >= self.next_round_delivered {
             self.advance_round();
         }
-        
+
         // Update BBR state machine
         self.update_state(now)?;
-        
+
         // Update congestion window
         self.update_congestion_window()?;
-        
+
         protocol_event!(
             Level::Debug,
             "BBR ACK processed";
@@ -375,30 +381,44 @@ impl BBRController {
             "rtt_ms" => rtt.as_millis(),
             "bandwidth_bps" => self.bandwidth_filter.max_bandwidth(),
             "cwnd" => self.congestion_window,
+            "packets_out" => self.packets_out,
             "state" => format!("{:?}", self.state)
         );
-        
+
         Ok(())
     }
 
     /// Handle packet loss
     pub fn on_loss(&mut self, lost_bytes: u64, now: Instant) -> Result<()> {
+        // Save prior cwnd for comparison
+        self.prior_cwnd = self.congestion_window;
+
+        // Increment retransmission counter
+        if lost_bytes >= self.mss {
+            let packets_lost = lost_bytes / self.mss;
+            self.retrans_out += packets_lost;
+            // Decrement outstanding packets
+            self.packets_out = self.packets_out.saturating_sub(packets_lost);
+        }
+
         // BBR is less reactive to individual losses
         // Only react to persistent congestion
-        
+
         protocol_event!(
             Level::Debug,
             "BBR packet loss";
             "lost_bytes" => lost_bytes,
+            "prior_cwnd" => self.prior_cwnd,
+            "retrans_out" => self.retrans_out,
             "state" => format!("{:?}", self.state)
         );
-        
+
         // In startup, loss may indicate we've found the bottleneck
         if matches!(self.state, BBRState::Startup) && lost_bytes > self.mss {
             // Transition to drain if we see significant loss
             self.enter_drain(now)?;
         }
-        
+
         Ok(())
     }
 
@@ -651,6 +671,14 @@ impl BBRController {
     /// Update packets in flight counter
     pub fn set_packets_in_flight(&mut self, packets: u64) {
         self.packets_out = packets;
+    }
+
+    /// Track packet send for statistics
+    pub fn on_packet_sent(&mut self, bytes: u64) {
+        if bytes >= self.mss {
+            let packets = bytes / self.mss;
+            self.packets_out += packets;
+        }
     }
 
     /// Mark as app-limited

@@ -448,23 +448,26 @@ impl CubicController {
     fn cubic_update(&mut self, now: Instant) {
         let epoch_start = self.epoch_start.unwrap_or(now);
         let t = now.duration_since(epoch_start).as_secs_f64();
-        
-        // Calculate CUBIC window: W_cubic(t) = C * (t - K)^3 + W_max
+
+        // Set origin point for CUBIC calculation (W_max)
+        self.origin_point = self.cwnd_last_max as f64;
+
+        // Calculate CUBIC window: W_cubic(t) = C * (t - K)^3 + origin_point
         let k = self.calculate_k();
-        let w_cubic = self.config.cubic_c * (t - k).powi(3) + self.cwnd_last_max as f64;
+        let w_cubic = self.config.cubic_c * (t - k).powi(3) + self.origin_point;
         self.w_cubic = w_cubic.max(self.config.min_cwnd as f64);
 
         // Calculate TCP-friendly window if enabled
         if self.config.tcp_friendliness {
             self.update_tcp_friendly_window(t);
-            
+
             // Use the larger of CUBIC and TCP-friendly windows
-            let target_cwnd = if self.w_cubic < self.w_tcp {
-                self.w_tcp
+            let target_cwnd = if self.w_cubic < self.tcp_cwnd {
+                self.tcp_cwnd
             } else {
                 self.w_cubic
             };
-            
+
             self.update_cwnd_toward_target(target_cwnd);
         } else {
             self.update_cwnd_toward_target(self.w_cubic);
@@ -482,13 +485,16 @@ impl CubicController {
         // TCP-friendly window: W_tcp(t) = W_max * beta + 3 * (1-beta) / (1+beta) * t / RTT
         let w_max = self.cwnd_last_max as f64;
         let rtt_secs = self.srtt.as_secs_f64();
-        
+
         if rtt_secs > 0.0 {
-            self.w_tcp = w_max * self.config.beta + 
+            self.tcp_cwnd = w_max * self.config.beta +
                 3.0 * (1.0 - self.config.beta) / (1.0 + self.config.beta) * t / rtt_secs;
         } else {
-            self.w_tcp = w_max * self.config.beta;
+            self.tcp_cwnd = w_max * self.config.beta;
         }
+
+        // Keep w_tcp in sync for compatibility
+        self.w_tcp = self.tcp_cwnd;
     }
 
     fn update_cwnd_toward_target(&mut self, target: f64) {
