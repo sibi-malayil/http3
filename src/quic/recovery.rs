@@ -496,9 +496,9 @@ impl RecoveryManager {
 
             // RFC 9002 Section 6.2.1: Reset PTO count
             self.pto_count = 0;
-            
+
             // Notify congestion controller of acknowledgment
-            self.congestion_controller.on_ack_received(ack_ranges);
+            let _ = self.congestion_controller.on_ack_received(ack_ranges);
 
             // RFC 9002 Section 6.1: Detect lost packets
             lost_frames.extend(self.detect_lost_packets(pn_space)?);
@@ -835,9 +835,9 @@ impl RecoveryManager {
                     "packet_size" => packet.size,
                     "time_since_sent_ms" => now.duration_since(packet.sent_time).as_millis()
                 );
-                
+
                 // RFC 9002: Inform congestion controller of loss event
-                self.congestion_controller.on_packet_lost(packet.size as u64);
+                let _ = self.congestion_controller.on_packet_lost(packet.size as u64);
             }
         }
         

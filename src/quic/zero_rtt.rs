@@ -94,7 +94,8 @@ pub struct ZeroRttManager {
 
 /// Data queued for 0-RTT transmission
 #[derive(Debug, Clone)]
-struct ZeroRttData {
+/// Data buffered for 0-RTT transmission
+pub struct ZeroRttData {
     /// Stream ID
     stream_id: u64,
     /// Data to send

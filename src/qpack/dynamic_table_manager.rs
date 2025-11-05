@@ -408,6 +408,7 @@ pub struct TableStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::qpack::field::{HeaderName, HeaderValue};
 
     #[tokio::test]
     async fn test_dynamic_table_insertion() {

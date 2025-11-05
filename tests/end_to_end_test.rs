@@ -304,19 +304,19 @@ async fn test_datagram_frames() {
 #[tokio::test]
 async fn test_transport_parameters_negotiation() {
     let client_params = TransportParameters {
-        initial_max_stream_data_bidi_local: Some(65536.into()),
-        initial_max_data: Some(1048576.into()),
-        initial_max_streams_bidi: Some(100.into()),
-        max_idle_timeout: Some(30000.into()),
-        active_connection_id_limit: Some(4.into()),
+        initial_max_stream_data_bidi_local: Some(65536u32.into()),
+        initial_max_data: Some(1048576u32.into()),
+        initial_max_streams_bidi: Some(100u32.into()),
+        max_idle_timeout: Some(30000u32.into()),
+        active_connection_id_limit: Some(4u32.into()),
         ..Default::default()
     };
-    
+
     let server_params = TransportParameters {
-        initial_max_stream_data_bidi_remote: Some(65536.into()),
-        initial_max_data: Some(2097152.into()),
-        initial_max_streams_bidi: Some(200.into()),
-        max_idle_timeout: Some(60000.into()),
+        initial_max_stream_data_bidi_remote: Some(65536u32.into()),
+        initial_max_data: Some(2097152u32.into()),
+        initial_max_streams_bidi: Some(200u32.into()),
+        max_idle_timeout: Some(60000u32.into()),
         preferred_address: None,
         ..Default::default()
     };

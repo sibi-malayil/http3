@@ -697,19 +697,25 @@ impl WebTransportManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::qpack::field::{HeaderName, HeaderValue};
+    use crate::quic::stream::StreamId;
+
+    fn stream_id() -> StreamId {
+        StreamId::from(0u64)
+    }
 
     #[test]
     fn test_webtransport_session_creation() {
         let session_id = SessionId::new(1);
         let session = WebTransportSession::new(
             session_id,
-            stream_id,
+            stream_id(),
             "example.com".to_string(),
             "/webtransport".to_string(),
         );
 
         assert_eq!(session.session_id, session_id);
-        assert_eq!(session.stream_id, stream_id);
+        assert_eq!(session.stream_id(), stream_id());
         assert_eq!(session.state, SessionState::Establishing);
         assert_eq!(session.origin, "example.com");
         assert_eq!(session.path, "/webtransport");
@@ -734,10 +740,10 @@ mod tests {
             HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/chat")),
         ];
 
-        let session_id = manager.establish_session(stream_id, &headers).unwrap();
+        let session_id = manager.establish_session(stream_id(), &headers).unwrap();
         assert_eq!(session_id.value(), 1);
         assert_eq!(manager.sessions.len(), 1);
-        assert!(manager.stream_to_session.contains_key(&stream_id));
+        assert!(manager.stream_to_session.contains_key(&stream_id()));
 
         let session = manager.get_session(session_id).unwrap();
         assert_eq!(session.state, SessionState::Active);
@@ -788,7 +794,7 @@ mod tests {
             HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/test")),
         ];
 
-        let session_id = manager.establish_session(stream_id, &headers).unwrap();
+        let session_id = manager.establish_session(stream_id(), &headers).unwrap();
         let data = Bytes::from_static(b"Hello WebTransport!");
 
         // Send datagram
@@ -800,7 +806,7 @@ mod tests {
         assert_eq!(session.stats.datagram_bytes_sent, data.len() as u64);
 
         // Simulate receiving datagram
-        manager.on_datagram_received(stream_id, data.clone()).unwrap();
+        manager.on_datagram_received(stream_id(), data.clone()).unwrap();
         
         let received = manager.next_received_datagram().unwrap();
         assert_eq!(received.session_id, session_id);
@@ -821,13 +827,13 @@ mod tests {
             HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/test")),
         ];
 
-        let session_id = manager.establish_session(stream_id, &headers).unwrap();
+        let session_id = manager.establish_session(stream_id(), &headers).unwrap();
         assert_eq!(manager.sessions.len(), 1);
 
         // Close session
         manager.close_session(session_id).unwrap();
         assert_eq!(manager.sessions.len(), 0);
-        assert!(!manager.stream_to_session.contains_key(&stream_id));
+        assert!(!manager.stream_to_session.contains_key(&stream_id()));
 
         let stats = manager.stats();
         assert_eq!(stats.sessions_established, 1);
@@ -845,7 +851,7 @@ mod tests {
             HeaderField::new(HeaderName::from(":path"), HeaderValue::from("/test")),
         ];
 
-        let result = manager.establish_session(stream_id, &headers);
+        let result = manager.establish_session(stream_id(), &headers);
         assert!(result.is_err());
     }
 

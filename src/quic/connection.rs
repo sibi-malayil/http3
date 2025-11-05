@@ -609,7 +609,7 @@ impl Connection {
                 // Handle acknowledgments for congestion control with RTT measurement
                 // In production, RTT would be calculated from packet send time to ack receive time
                 let rtt = Duration::from_millis(100); // TODO: Calculate actual RTT from packet timing
-                self.congestion.on_ack_received_with_rtt(&ranges, rtt);
+                let _ = self.congestion.on_ack_received_with_rtt(&ranges, rtt);
                 
                 // Update bytes in flight (simplified)
                 let acked_bytes: u64 = ranges.iter()

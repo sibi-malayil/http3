@@ -333,6 +333,7 @@ pub struct EncoderStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::qpack::field::{HeaderName, HeaderValue};
 
     #[tokio::test]
     async fn test_enhanced_encoder_basic() {

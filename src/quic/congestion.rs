@@ -221,7 +221,8 @@ pub struct CongestionController {
 
 /// NewReno algorithm state
 #[derive(Debug, Clone)]
-struct NewRenoState {
+/// NewReno congestion control state
+pub struct NewRenoState {
     /// Current congestion window (bytes)
     congestion_window: u64,
     /// Slow start threshold (bytes)

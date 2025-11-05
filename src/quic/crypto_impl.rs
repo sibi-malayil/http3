@@ -170,7 +170,8 @@ pub struct CryptoManager {
 
 /// Header protection key wrapper
 #[derive(Clone, Debug)]
-struct HeaderProtectionKey {
+/// Header protection key for encrypting packet headers
+pub struct HeaderProtectionKey {
     key: Vec<u8>,
 }
 

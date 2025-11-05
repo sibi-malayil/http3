@@ -14,7 +14,11 @@
     clippy::too_many_lines,
     clippy::type_complexity,
     clippy::missing_errors_doc,
-    clippy::missing_panics_doc
+    clippy::missing_panics_doc,
+    clippy::redundant_else,
+    clippy::unreadable_literal,
+    dead_code,
+    missing_docs
 )]
 
 //! # HTTP/3 Implementation
