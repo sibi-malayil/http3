@@ -6,6 +6,8 @@ use crate::{
     error::{Error, Result},
     quic::packet::{Packet, PacketHeader, PacketType},
     crypto::rustls_impl::{EncryptionLevel, PacketKey, HeaderKey, TlsState},
+    whathappened::Level,
+    crypto_event,
 };
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 use std::collections::HashMap;
