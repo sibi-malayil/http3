@@ -75,8 +75,25 @@ pub struct HeaderProtectionKey {
     key: Vec<u8>,
 }
 
+impl HeaderProtectionKey {
+    /// Get the protection algorithm
+    pub fn algorithm(&self) -> HeaderProtectionAlgorithm {
+        self.algorithm
+    }
+
+    /// Get the protection key
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// Get key length based on algorithm
+    pub fn key_len(&self) -> usize {
+        self.key.len()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-enum HeaderProtectionAlgorithm {
+pub enum HeaderProtectionAlgorithm {
     Aes128,
     Aes256,
     ChaCha20,
