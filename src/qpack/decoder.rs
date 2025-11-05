@@ -342,6 +342,16 @@ impl Decoder {
         // For now, return None
         None
     }
+
+    /// Get decoder configuration
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// Get maximum table capacity from config
+    pub fn max_table_capacity(&self) -> usize {
+        self.config.max_table_capacity as usize
+    }
 }
 
 impl Default for Decoder {

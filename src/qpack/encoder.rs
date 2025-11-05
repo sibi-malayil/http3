@@ -94,6 +94,12 @@ impl Encoder {
             if !allow_blocking {
                 return Err(Error::QpackWouldBlock);
             }
+
+            // Check if we've reached the maximum number of blocked streams
+            if self.blocked_streams.len() as u64 >= self.max_blocked_streams {
+                return Err(Error::QpackWouldBlock);
+            }
+
             self.blocked_streams.insert(stream_id, BlockedStream {
                 stream_id,
                 required_insert_count,
