@@ -683,6 +683,18 @@ impl CryptoManager {
 
         let packet_type = self.determine_packet_type_from_byte(*first_byte)?;
 
+        // Cross-validate packet type using alternative parser (defensive programming)
+        let validated_type = self.parse_packet_type(*first_byte)?;
+        if packet_type != validated_type {
+            crypto_event!(
+                Level::Error,
+                "Packet type validation mismatch";
+                "primary" => format!("{:?}", packet_type),
+                "validated" => format!("{:?}", validated_type)
+            );
+            return Err(Error::CryptoError("Packet type validation failed".to_string()));
+        }
+
         // Parse header structure to get offsets and lengths
         let header_info = self.parse_packet_header(packet_data, packet_type)?;
 
@@ -2006,7 +2018,11 @@ impl CryptoManager {
         Ok((value, length_of_length))
     }
     
-    /// Remove header protection from packet
+    /// Remove header protection from packet using pre-extracted sample
+    ///
+    /// Alternative implementation that accepts HeaderInfo and pre-extracted sample.
+    /// Used for scenarios where header structure has already been parsed and
+    /// sample has been extracted from packet payload.
     fn remove_header_protection_from_packet(
         &self,
         packet_data: &[u8],
