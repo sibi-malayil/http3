@@ -14,12 +14,12 @@ pub use crate::quic::crypto_impl::{
 };
 
 /// Key derivation utilities following RFC 9001 Section 5
-mod key_derivation {
+pub mod key_derivation {
     use ring::hkdf;
-    
+
     /// QUIC version 1 label prefix
-    const QUIC_VERSION_LABEL: &[u8] = b"tls13 quic ";
-    
+    pub const QUIC_VERSION_LABEL: &[u8] = b"tls13 quic ";
+
     /// Derive QUIC keys using HKDF-Expand-Label
     pub fn hkdf_expand_label(
         secret: &[u8],
@@ -28,50 +28,51 @@ mod key_derivation {
         length: usize,
     ) -> Result<Vec<u8>, ring::error::Unspecified> {
         let mut info = Vec::new();
-        
+
         // Length (2 bytes, big-endian)
         info.extend_from_slice(&(length as u16).to_be_bytes());
-        
+
         // Label length + label (prefixed with "tls13 quic ")
         let full_label = [QUIC_VERSION_LABEL, label].concat();
         info.push(full_label.len() as u8);
         info.extend_from_slice(&full_label);
-        
+
         // Context length + context
         info.push(context.len() as u8);
         info.extend_from_slice(context);
-        
+
         let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, &[]);
         let prk = salt.extract(secret);
         let info_slice = info.as_slice();
         let info_array = [info_slice];
         let okm = prk.expand(&info_array, hkdf::HKDF_SHA256)?;
-        
+
         let mut output = vec![0u8; length];
         okm.fill(&mut output)?;
         Ok(output)
     }
-    
-    /// Derive initial secrets from connection ID
-    fn build_hkdf_info(label: &[u8], context: &[u8], length: usize) -> Vec<u8> {
+
+    /// Build HKDF info structure for key derivation
+    pub fn build_hkdf_info(label: &[u8], context: &[u8], length: usize) -> Vec<u8> {
         let mut info = Vec::new();
-        
+
         // Length as 2 bytes
         info.push((length >> 8) as u8);
         info.push(length as u8);
-        
+
         // Label with "tls13 " prefix
         let full_label = [b"tls13 ", label].concat();
         info.push(full_label.len() as u8);
         info.extend_from_slice(&full_label);
-        
+
         // Context
         info.push(context.len() as u8);
         info.extend_from_slice(context);
-        
+
         info
     }
 
+    /// Derive initial secrets from connection ID per RFC 9001
     pub fn derive_initial_secrets(connection_id: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ring::error::Unspecified> {
         // QUIC version 1 initial salt per RFC 9001
         let initial_salt = [

@@ -455,37 +455,15 @@ impl CryptoManager {
     pub fn init_initial_keys(&mut self, client_dst_cid: &[u8]) -> Result<()> {
         crypto_event!(
             Level::Info,
-            "Deriving initial keys from DCID"; 
+            "Deriving initial keys from DCID";
             "role" => self.role,
             "dcid" => client_dst_cid
         );
-        
-        // Extract initial secret using QUIC v1 salt
-        let initial_secret = hkdf::Salt::new(hkdf::HKDF_SHA256, INITIAL_SALT)
-            .extract(client_dst_cid);
-        
-        // Derive client and server initial secrets using Prk directly
-        let client_initial_secret = {
-            let info = build_hkdf_label(b"client in", &[], 32)?;
-            let info_slice = info.as_slice();
-            let info_array = [info_slice];
-            let okm = initial_secret.expand(&info_array, hkdf::HKDF_SHA256)
-                .map_err(|_| Error::CryptoError("HKDF expand failed".to_string()))?;
-            let mut output = vec![0u8; 32];
-            okm.fill(&mut output).map_err(|_| Error::CryptoError("HKDF fill failed".to_string()))?;
-            output
-        };
-        
-        let server_initial_secret = {
-            let info = build_hkdf_label(b"server in", &[], 32)?;
-            let info_slice = info.as_slice();
-            let info_array = [info_slice];
-            let okm = initial_secret.expand(&info_array, hkdf::HKDF_SHA256)
-                .map_err(|_| Error::CryptoError("HKDF expand failed".to_string()))?;
-            let mut output = vec![0u8; 32];
-            okm.fill(&mut output).map_err(|_| Error::CryptoError("HKDF fill failed".to_string()))?;
-            output
-        };
+
+        // Use RFC 9001 compliant key derivation from crypto.rs
+        let (client_initial_secret, server_initial_secret) =
+            crate::quic::crypto::key_derivation::derive_initial_secrets(client_dst_cid)
+                .map_err(|_| Error::CryptoError("Failed to derive initial secrets".to_string()))?;
 
         // Select appropriate secret based on role
         let (local_secret, remote_secret) = match self.role {
@@ -501,6 +479,12 @@ impl CryptoManager {
         // Server sends with server keys, receives with client keys
         self.initial_send_keys = Some(local_keys);
         self.initial_recv_keys = Some(remote_keys);
+
+        crypto_event!(
+            Level::Info,
+            "Successfully derived initial keys";
+            "role" => self.role
+        );
 
         Ok(())
     }
@@ -3162,52 +3146,15 @@ fn derive_packet_keys_for_suite(secret: &[u8], suite: CipherSuite) -> Result<Pac
 
 
 /// HKDF-Expand-Label function as defined in RFC 8446 Section 7.1
+/// Build HKDF label structure per RFC 8446 - delegates to public crypto module
 fn build_hkdf_label(label: &[u8], context: &[u8], length: usize) -> Result<Vec<u8>> {
-    // Build the HkdfLabel struct as per RFC 8446
-    let mut hkdf_label = Vec::new();
-    
-    // uint16 length
-    hkdf_label.put_u16(length as u16);
-    
-    // opaque label<7..255> = "tls13 " + Label
-    let full_label = [b"tls13 ", label].concat();
-    hkdf_label.put_u8(full_label.len() as u8);
-    hkdf_label.extend_from_slice(&full_label);
-    
-    // opaque context<0..255>
-    hkdf_label.put_u8(context.len() as u8);
-    hkdf_label.extend_from_slice(context);
-    
-    Ok(hkdf_label)
+    Ok(crate::quic::crypto::key_derivation::build_hkdf_info(label, context, length))
 }
 
+/// Derive QUIC keys using HKDF-Expand-Label per RFC 8446 - delegates to public crypto module
 fn hkdf_expand_label(secret: &[u8], label: &[u8], context: &[u8], length: usize) -> Result<Vec<u8>> {
-    // Build the HkdfLabel struct as per RFC 8446
-    let mut hkdf_label = Vec::new();
-    
-    // uint16 length
-    hkdf_label.put_u16(length as u16);
-    
-    // opaque label<7..255> = "tls13 " + Label
-    let full_label = [b"tls13 ", label].concat();
-    hkdf_label.put_u8(full_label.len() as u8);
-    hkdf_label.extend_from_slice(&full_label);
-    
-    // opaque context<0..255>
-    hkdf_label.put_u8(context.len() as u8);
-    hkdf_label.extend_from_slice(context);
-    
-    // Perform HKDF-Expand
-    let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, secret);
-    let info = [&hkdf_label[..]];
-    let okm = prk.expand(&info, ArbitraryOutputLen(length))
-        .map_err(|_| Error::CryptoError("HKDF expand failed".to_string()))?;
-    
-    let mut output = vec![0u8; length];
-    okm.fill(&mut output)
-        .map_err(|_| Error::CryptoError("HKDF fill failed".to_string()))?;
-    
-    Ok(output)
+    crate::quic::crypto::key_derivation::hkdf_expand_label(secret, label, context, length)
+        .map_err(|_| Error::CryptoError("HKDF expand failed".to_string()))
 }
 
 impl HeaderProtectionKey {
