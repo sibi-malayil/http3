@@ -240,9 +240,10 @@ impl CryptoManager {
             output
         };
         
-        // Create packet keys
-        let client_keys = derive_packet_keys(&client_secret, CipherSuite::Aes128Gcm)?;
-        let server_keys = derive_packet_keys(&server_secret, CipherSuite::Aes128Gcm)?;
+        // Create packet keys using appropriate cipher suite for Initial level
+        let suite = CipherSuite::select_for_level(ProtectionLevel::Initial);
+        let client_keys = derive_packet_keys(&client_secret, suite)?;
+        let server_keys = derive_packet_keys(&server_secret, suite)?;
         
         let keys = match self.role {
             ConnectionRole::Client => PacketKeys {
@@ -485,7 +486,7 @@ impl CipherSuite {
             Self::ChaCha20Poly1305 => &aead::CHACHA20_POLY1305,
         }
     }
-    
+
     fn key_len(&self) -> usize {
         match self {
             Self::Aes128Gcm => 16,
@@ -493,13 +494,32 @@ impl CipherSuite {
             Self::ChaCha20Poly1305 => 32,
         }
     }
-    
+
     fn hp_algorithm(&self) -> HeaderProtectionAlgorithm {
         match self {
             Self::Aes128Gcm => HeaderProtectionAlgorithm::Aes128,
             Self::Aes256Gcm => HeaderProtectionAlgorithm::Aes256,
             Self::ChaCha20Poly1305 => HeaderProtectionAlgorithm::ChaCha20,
         }
+    }
+
+    /// Select cipher suite based on security requirements
+    /// Returns stronger cipher suites for production use
+    fn select_for_level(level: ProtectionLevel) -> Self {
+        match level {
+            // Initial packets always use AES-128-GCM per RFC 9001
+            ProtectionLevel::Initial => Self::Aes128Gcm,
+            // Handshake can use AES-256 for stronger security
+            ProtectionLevel::Handshake => Self::Aes256Gcm,
+            // Application data can use ChaCha20-Poly1305 or AES-256
+            // ChaCha20 is faster on systems without AES-NI
+            ProtectionLevel::Application => Self::ChaCha20Poly1305,
+        }
+    }
+
+    /// Get default cipher suite (AES-128-GCM for compatibility)
+    fn default() -> Self {
+        Self::Aes128Gcm
     }
 }
 
@@ -545,7 +565,7 @@ fn convert_directional_keys(_keys: rustls::quic::DirectionalKeys) -> Directional
 
 /// Create dummy directional keys for testing
 fn create_dummy_directional_keys() -> DirectionalKeys {
-    let suite = CipherSuite::Aes128Gcm; // Default
+    let suite = CipherSuite::default();
     
     // Create dummy keys for now
     let key = vec![0u8; 16];
