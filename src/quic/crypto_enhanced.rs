@@ -478,6 +478,26 @@ impl CryptoManager {
             }
         }
     }
+
+    /// Get local transport parameters
+    pub fn local_params(&self) -> Option<&TransportParameters> {
+        self.local_params.as_ref()
+    }
+
+    /// Set local transport parameters
+    pub fn set_local_params(&mut self, params: TransportParameters) {
+        self.local_params = Some(params);
+    }
+
+    /// Get peer transport parameters
+    pub fn peer_params(&self) -> Option<&TransportParameters> {
+        self.peer_params.as_ref()
+    }
+
+    /// Set peer transport parameters (received during handshake)
+    pub fn set_peer_params(&mut self, params: TransportParameters) {
+        self.peer_params = Some(params);
+    }
 }
 
 /// Decrypted packet data
