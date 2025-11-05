@@ -670,29 +670,34 @@ impl StreamMultiplexer {
             return Ok(scheduled);
         }
         
-        // Allocate bytes proportionally to each urgency level
+        // Allocate bytes proportionally to each urgency level using deficit round-robin
         for urgency in active_queues {
             if let Some(queue) = queues.get_mut(&urgency) {
                 if queue.streams.is_empty() {
                     continue;
                 }
-                
+
                 // Calculate proportional allocation for this urgency level
                 let queue_allocation = (available_bytes * queue.weight) / total_weight;
                 let queue_remaining = queue_allocation.min(remaining_bytes);
-                
-                // Allocate to streams in this urgency level round-robin
+
+                // Add quantum to deficit for this round (DRR algorithm)
+                queue.deficit += queue_remaining;
+
+                // Allocate to streams in this urgency level using deficit
                 let streams_in_queue = queue.streams.len();
-                if streams_in_queue > 0 && queue_remaining > 0 {
-                    let per_stream = queue_remaining / streams_in_queue;
-                    let remainder = queue_remaining % streams_in_queue;
-                    
+                if streams_in_queue > 0 && queue.deficit > 0 {
+                    let per_stream = queue.deficit / streams_in_queue;
+                    let remainder = queue.deficit % streams_in_queue;
+
                     for (i, &stream_id) in queue.streams.iter().enumerate() {
                         let allocation = per_stream + if i < remainder { 1 } else { 0 };
-                        if allocation > 0 {
+                        if allocation > 0 && remaining_bytes >= allocation {
                             scheduled.push((stream_id, allocation));
                             remaining_bytes -= allocation;
                             queue.transmitted_bytes += allocation;
+                            // Deduct from deficit as bytes are allocated
+                            queue.deficit = queue.deficit.saturating_sub(allocation);
                         }
                     }
                 }

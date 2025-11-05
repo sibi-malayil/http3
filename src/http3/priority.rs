@@ -282,7 +282,8 @@ impl PriorityScheduler {
 
     /// Registers a new stream with default priority
     pub async fn register_stream(&self, stream_id: u64) -> Result<()> {
-        let priority = StreamPriority::new();
+        // Use the configured default priority
+        let priority = StreamPriority::with_priority(self.default_priority.clone());
         self.register_stream_with_priority(stream_id, priority).await
     }
 
