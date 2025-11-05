@@ -572,7 +572,7 @@ impl CryptoManager {
     fn derive_updated_keys_from_secret(&self, current_secret: &[u8]) -> Option<PacketKeys> {
         // Use Rust 2024 let chains for validation and key derivation
         if current_secret.len() >= 32 {
-            let salt = ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, &current_secret[..32]);
+            let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, &current_secret[..32]);
             let prk = salt.extract(&[]);
             
             // RFC 9001 Section 6.3: Use "quic ku" label for key update
@@ -1164,8 +1164,8 @@ impl CryptoManager {
         
         // RFC 9001 Section 5.1: Derive QUIC packet protection keys from TLS secrets
         // using HKDF-Expand-Label with appropriate labels
-        
-        let salt = ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, &secret[..32]);
+
+        let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, &secret[..32]);
         let prk = salt.extract(&[]); // No IKM needed since we have the secret
         
         // Labels for key derivation per RFC 9001 Section 5.1
