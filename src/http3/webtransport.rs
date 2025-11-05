@@ -31,14 +31,8 @@ use std::collections::{HashMap, VecDeque};
 /// WebTransport protocol identifier
 pub const WEBTRANSPORT_PROTOCOL: &str = "webtransport";
 
-/// Simple header field for WebTransport  
-#[derive(Debug, Clone)]
-pub struct HeaderField {
-    /// Header name
-    pub name: Vec<u8>,
-    /// Header value  
-    pub value: Vec<u8>,
-}
+// Use the proper HeaderField from qpack module
+pub use crate::qpack::field::HeaderField;
 
 /// WebTransport session ID type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

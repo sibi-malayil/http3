@@ -104,29 +104,29 @@ impl PushPromise {
     /// Get the promised authority
     pub fn authority(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| String::from_utf8_lossy(&h.name) == ":authority")
-            .map(|h| String::from_utf8_lossy(&h.value).to_string())
+            .find(|h| String::from_utf8_lossy(h.name.as_bytes()) == ":authority")
+            .map(|h| String::from_utf8_lossy(h.value.as_bytes()).to_string())
     }
 
     /// Get the promised method
     pub fn method(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| String::from_utf8_lossy(&h.name) == ":method")
-            .map(|h| String::from_utf8_lossy(&h.value).to_string())
+            .find(|h| String::from_utf8_lossy(h.name.as_bytes()) == ":method")
+            .map(|h| String::from_utf8_lossy(h.value.as_bytes()).to_string())
     }
 
     /// Get the promised path
     pub fn path(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| String::from_utf8_lossy(&h.name) == ":path")
-            .map(|h| String::from_utf8_lossy(&h.value).to_string())
+            .find(|h| String::from_utf8_lossy(h.name.as_bytes()) == ":path")
+            .map(|h| String::from_utf8_lossy(h.value.as_bytes()).to_string())
     }
 
     /// Get the promised scheme
     pub fn scheme(&self) -> Option<String> {
         self.headers.iter()
-            .find(|h| String::from_utf8_lossy(&h.name) == ":scheme")
-            .map(|h| String::from_utf8_lossy(&h.value).to_string())
+            .find(|h| String::from_utf8_lossy(h.name.as_bytes()) == ":scheme")
+            .map(|h| String::from_utf8_lossy(h.value.as_bytes()).to_string())
     }
 
     /// Check if this push is still active
