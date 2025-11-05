@@ -1132,14 +1132,25 @@ impl Connection {
                 ))
             }
         };
-        
+
+        // Validate packet type matches header (defensive programming)
+        let header_packet_type = self.determine_packet_type(&header)?;
+        if header_packet_type != packet_type {
+            protocol_event!(
+                Level::Warn,
+                "Packet type mismatch";
+                "expected" => format!("{:?}", packet_type),
+                "header" => format!("{:?}", header_packet_type)
+            );
+        }
+
         let packet = Packet::new(
             header,
             encrypted_packet,
             self.local_addr.unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 0))),
             self.remote_addr,
         );
-        
+
         self.recovery.on_packet_sent(&packet, frames);
 
         self.bytes_in_flight += packet_size as u64;

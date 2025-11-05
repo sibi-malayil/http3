@@ -35,8 +35,8 @@ use rustls::{
 };
 use std::{sync::Arc, collections::BTreeMap};
 
-/// QUIC version 1 salt for initial packet protection
-const INITIAL_SALT: &[u8] = &[
+/// QUIC version 1 salt for initial packet protection per RFC 9001 Section 5.2
+pub const INITIAL_SALT: &[u8] = &[
     0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3,
     0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad,
     0xcc, 0xbb, 0x7f, 0x0a,
@@ -680,9 +680,12 @@ impl CryptoManager {
         // Determine packet type from first byte
         let first_byte = packet_data.first()
             .ok_or_else(|| Error::CryptoError("Empty packet data".to_string()))?;
-        
+
         let packet_type = self.determine_packet_type_from_byte(*first_byte)?;
-        
+
+        // Parse header structure to get offsets and lengths
+        let header_info = self.parse_packet_header(packet_data, packet_type)?;
+
         // Use Rust 2024 let chains for key selection and unprotection
         if let Some(hp_key) = self.get_header_protection_key(packet_type)
             && let Some(pn_offset) = self.get_pn_offset(packet_data).ok()
@@ -692,13 +695,15 @@ impl CryptoManager {
                 &hp_key,
                 pn_offset,
             )?;
-            
+
             crypto_event!(
                 Level::Debug,
                 "Unprotected packet header";
                 "packet_type" => packet_type,
                 "packet_number" => packet_number,
-                "pn_length" => pn_length
+                "pn_length" => pn_length,
+                "header_len" => header_info.header_len,
+                "pn_offset" => header_info.pn_offset
             );
             
             Ok((packet_type, packet_number, pn_length))
@@ -1067,12 +1072,7 @@ impl CryptoManager {
             );
 
             // Build the HKDF info with provided label and context
-            let mut info = Vec::new();
-            info.extend_from_slice(&(length as u16).to_be_bytes());
-            info.push(label.len() as u8);
-            info.extend_from_slice(label);
-            info.push(context.len() as u8);
-            info.extend_from_slice(context);
+            let info = build_hkdf_label(label, context, length)?;
 
             // For now, use a placeholder since rustls doesn't expose early secrets
             // In a real implementation, we'd use HKDF-Expand-Label with the early secret

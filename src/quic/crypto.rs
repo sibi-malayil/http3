@@ -74,14 +74,8 @@ pub mod key_derivation {
 
     /// Derive initial secrets from connection ID per RFC 9001
     pub fn derive_initial_secrets(connection_id: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ring::error::Unspecified> {
-        // QUIC version 1 initial salt per RFC 9001
-        let initial_salt = [
-            0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3,
-            0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad,
-            0xcc, 0xbb, 0x7f, 0x0a,
-        ];
-        
-        let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, &initial_salt);
+        // Use the RFC 9001 compliant initial salt from crypto_impl
+        let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, crate::quic::crypto_impl::INITIAL_SALT);
         let initial_secret = salt.extract(connection_id);
         
         // Derive client and server initial secrets using PRK expand
