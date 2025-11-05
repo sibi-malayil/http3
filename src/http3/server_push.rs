@@ -597,7 +597,7 @@ impl ServerPushManager {
         let mut has_path = false;
 
         for header in headers {
-            let name = String::from_utf8_lossy(&header.name);
+            let name = String::from_utf8_lossy(header.name.as_bytes());
             match name.as_ref() {
                 ":method" => {
                     if has_method {
@@ -605,9 +605,9 @@ impl ServerPushManager {
                             .to_http3_error(Http3ErrorCode::MessageError));
                     }
                     has_method = true;
-                    
+
                     // Only safe methods allowed for push
-                    let method = String::from_utf8_lossy(&header.value);
+                    let method = String::from_utf8_lossy(header.value.as_bytes());
                     if !matches!(method.as_ref(), "GET" | "HEAD") {
                         return Err("Unsafe method in push promise"
                             .to_http3_error(Http3ErrorCode::MessageError));
@@ -659,9 +659,9 @@ impl ServerPushManager {
         
         for header in headers {
             // Simple encoding: length + name + length + value
-            let name_bytes = &header.name;
-            let value_bytes = &header.value;
-            
+            let name_bytes = header.name.as_bytes();
+            let value_bytes = header.value.as_bytes();
+
             buf.extend_from_slice(&[name_bytes.len() as u8]);
             buf.extend_from_slice(name_bytes);
             buf.extend_from_slice(&[value_bytes.len() as u8]);

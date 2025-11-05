@@ -329,16 +329,16 @@ impl WebTransportManager {
         let mut protocol = None;
 
         for header in headers {
-            let name_str = String::from_utf8_lossy(&header.name);
+            let name_str = String::from_utf8_lossy(header.name.as_bytes());
             match name_str.as_ref() {
                 ":authority" | "origin" => {
-                    origin = Some(String::from_utf8_lossy(&header.value).to_string());
+                    origin = Some(String::from_utf8_lossy(header.value.as_bytes()).to_string());
                 }
                 ":path" => {
-                    path = Some(String::from_utf8_lossy(&header.value).to_string());
+                    path = Some(String::from_utf8_lossy(header.value.as_bytes()).to_string());
                 }
                 ":protocol" => {
-                    protocol = Some(String::from_utf8_lossy(&header.value).to_string());
+                    protocol = Some(String::from_utf8_lossy(header.value.as_bytes()).to_string());
                 }
                 _ => {}
             }
@@ -709,7 +709,7 @@ mod tests {
         );
 
         assert_eq!(session.session_id, session_id);
-        assert_eq!(session.stream_id(), stream_id());
+        assert_eq!(session.stream_id, stream_id());
         assert_eq!(session.state, SessionState::Establishing);
         assert_eq!(session.origin, "example.com");
         assert_eq!(session.path, "/webtransport");
@@ -748,7 +748,11 @@ mod tests {
     #[test]
     fn test_stream_management() {
         let mut manager = WebTransportManager::default_for_role(ConnectionRole::Server);
-        
+
+        // Create stream IDs for test
+        let main_stream = stream_id();
+        let data_stream = StreamId::from(4u64);
+
         let headers = vec![
             HeaderField::new(HeaderName::from(":protocol"), HeaderValue::from("webtransport")),
             HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),
@@ -856,8 +860,11 @@ mod tests {
             ..Default::default()
         };
         let mut manager = WebTransportManager::new(config, ConnectionRole::Server);
-        
-        
+
+        // Create stream IDs for test
+        let stream1 = stream_id();
+        let stream2 = StreamId::from(4u64);
+
         let headers = vec![
             HeaderField::new(HeaderName::from(":protocol"), HeaderValue::from("webtransport")),
             HeaderField::new(HeaderName::from(":authority"), HeaderValue::from("example.com")),

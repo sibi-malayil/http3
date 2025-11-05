@@ -292,7 +292,7 @@ impl DecoderInstructionProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::qpack::field::{HeaderName, HeaderValue};
+    use bytes::BytesMut;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     #[tokio::test]

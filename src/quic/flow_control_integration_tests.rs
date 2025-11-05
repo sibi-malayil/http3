@@ -319,7 +319,7 @@ mod tests {
         manager.conn_flow_control.should_send_max_data = true;
         
         // Test that the stream ID is valid (stream was created successfully)
-        assert!(stream_id > 0, "Stream ID should be valid: {}", stream_id);
+        assert!(stream_id.into_inner() > 0, "Stream ID should be valid: {}", stream_id);
         
         let legacy_with_fc = manager.get_pending_flow_control_frames();
         manager.conn_flow_control.should_send_max_data = true; // Reset for second test
