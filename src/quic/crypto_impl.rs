@@ -703,7 +703,8 @@ impl CryptoManager {
                 "packet_number" => packet_number,
                 "pn_length" => pn_length,
                 "header_len" => header_info.header_len,
-                "pn_offset" => header_info.pn_offset
+                "pn_offset" => header_info.pn_offset,
+                "expected_pn_length" => header_info.pn_length
             );
             
             Ok((packet_type, packet_number, pn_length))
@@ -1083,7 +1084,8 @@ impl CryptoManager {
                 "Attempting to export early keying material";
                 "label_len" => label.len(),
                 "context_len" => context.len(),
-                "requested_length" => length
+                "requested_length" => length,
+                "hkdf_info_len" => info.len()
             );
             
             // Fill with deterministic data based on label and context for now
