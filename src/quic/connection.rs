@@ -1161,15 +1161,20 @@ impl Connection {
     
     /// Get the next packet number
     fn next_packet_number(&mut self) -> u64 {
-        let space = match self.state {
-            ConnectionState::Initial => 0,
-            ConnectionState::Handshaking => 1,
-            _ => 2,
+        // Determine packet type from current state
+        let packet_type = match self.state {
+            ConnectionState::Initial => PacketType::Initial,
+            ConnectionState::Handshaking => PacketType::Handshake,
+            ConnectionState::EarlyData => PacketType::ZeroRtt,
+            _ => PacketType::OneRtt,
         };
-        
+
+        // Use helper to get space index
+        let space = Self::space_index_from_type(packet_type);
+
         let pn = self.packet_numbers[space];
         self.packet_numbers[space] += 1;
-        eprintln!("DEBUG: next_packet_number called, role={:?}, space={}, returning {}, new value={}", 
+        eprintln!("DEBUG: next_packet_number called, role={:?}, space={}, returning {}, new value={}",
             self.role, space, pn, self.packet_numbers[space]);
         pn
     }

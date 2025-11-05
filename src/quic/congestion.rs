@@ -621,14 +621,39 @@ impl CongestionController {
         match self.bbr.state {
             BBRState::Startup => {
                 // Exit startup if bandwidth stops growing
-                if let Some(prev_bw) = self.bbr.bandwidth_samples.back().map(|s| s.bandwidth)
-                    && let Some(prev_prev_bw) = self.bbr.bandwidth_samples.get(self.bbr.bandwidth_samples.len().saturating_sub(2)).map(|s| s.bandwidth)
-                    && prev_bw < prev_prev_bw * 125 / 100 // Less than 25% growth
+                // Use multiple samples for better accuracy
+                if let Some(prev_sample) = self.bbr.bandwidth_samples.back()
+                    && let Some(prev_prev_sample) = self.bbr.bandwidth_samples.get(self.bbr.bandwidth_samples.len().saturating_sub(2))
                 {
-                    self.bbr.state = BBRState::Drain;
-                    self.bbr.pacing_gain = 1.0 / 2.77;
-                    self.bbr.last_state_change = now;
-                    self.bbr.state_duration = Duration::ZERO;
+                    let prev_bw = prev_sample.bandwidth;
+                    let prev_prev_bw = prev_prev_sample.bandwidth;
+
+                    // Check sample quality: use RTT and bytes_acked for filtering
+                    let sample_time_diff = if prev_sample.timestamp >= prev_prev_sample.timestamp {
+                        prev_sample.timestamp.duration_since(prev_prev_sample.timestamp)
+                    } else {
+                        Duration::ZERO
+                    };
+                    let min_sample_interval = Duration::from_millis(10);
+                    let is_valid_sample = sample_time_diff >= min_sample_interval
+                        && prev_sample.bytes_acked >= 1000  // Minimum bytes for valid sample
+                        && prev_sample.rtt > Duration::ZERO;
+
+                    if is_valid_sample && prev_bw < prev_prev_bw * 125 / 100 {
+                        // Less than 25% growth
+                        self.bbr.state = BBRState::Drain;
+                        self.bbr.pacing_gain = 1.0 / 2.77;
+                        self.bbr.last_state_change = now;
+                        self.bbr.state_duration = Duration::ZERO;
+
+                        perf_event!(
+                            Level::Debug,
+                            "BBR transitioning to Drain";
+                            "prev_bw" => prev_bw,
+                            "prev_prev_bw" => prev_prev_bw,
+                            "sample_rtt_ms" => prev_sample.rtt.as_millis()
+                        );
+                    }
                 }
             }
             BBRState::Drain => {
