@@ -154,10 +154,11 @@ impl Encoder {
             return Ok(());
         }
         
-        // Try dynamic table for full match
-        if let Some(relative_index) = self.dynamic_table.find_field(field) {
+        // Try dynamic table for full match using encoder's method
+        if let Some(index) = self.find_in_dynamic_table(field) {
+            let relative_index = index;
             let absolute_index = self.dynamic_table.relative_to_absolute(relative_index).unwrap();
-            
+
             if absolute_index <= base_index {
                 // Use indexed field line
                 self.encode_indexed_field_line(buf, false, relative_index)?;
@@ -168,11 +169,16 @@ impl Encoder {
             self.encode_postbase_indexed_field_line(buf, post_base_index)?;
             return Ok(());
         }
-        
+
+        // Check if we should insert into dynamic table
+        if self.should_insert(field) {
+            self.send_insert_instruction(field)?;
+        }
+
         // Try name-only matches
         let (name_table, name_index) = if let Some(index) = StaticTable::find_name(&field.name) {
             (true, index)
-        } else if let Some(relative_index) = self.dynamic_table.find_name(&field.name) {
+        } else if let Some(relative_index) = self.find_name_in_dynamic_table(&field.name) {
             let absolute_index = self.dynamic_table.relative_to_absolute(relative_index).unwrap();
             if absolute_index <= base_index {
                 (false, relative_index)
